@@ -1,0 +1,694 @@
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+<meta charset="utf-8">
+<title>GhostNet AI - Full System Architecture Specification</title>
+<!--[if gte mso 9]>
+<xml>
+<w:WordDocument>
+<w:View>Print</w:View>
+<w:Zoom>100</w:Zoom>
+<w:DoNotOptimizeForBrowser/>
+</w:WordDocument>
+</xml>
+<![endif]-->
+<style>
+    @page {
+        size: A4 portrait;
+        margin: 2.5cm 2.0cm 2.5cm 2.0cm;
+        mso-header-margin: 1.2cm;
+        mso-footer-margin: 1.2cm;
+    }
+    body {
+        font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+        font-size: 11pt;
+        line-height: 1.6;
+        color: #2D3748;
+        background-color: #FFFFFF;
+    }
+    h1 {
+        font-size: 24pt;
+        font-weight: 700;
+        color: #0F3854;
+        border-bottom: 3px solid #008080;
+        padding-bottom: 8px;
+        margin-top: 24pt;
+        margin-bottom: 12pt;
+    }
+    h2 {
+        font-size: 16pt;
+        font-weight: 600;
+        color: #1A5276;
+        border-bottom: 1.5px solid #CBD5E0;
+        padding-bottom: 4px;
+        margin-top: 18pt;
+        margin-bottom: 8pt;
+    }
+    h3 {
+        font-size: 13pt;
+        font-weight: 600;
+        color: #2E4053;
+        margin-top: 14pt;
+        margin-bottom: 6pt;
+    }
+    h4 {
+        font-size: 11pt;
+        font-weight: 600;
+        color: #34495E;
+        margin-top: 10pt;
+        margin-bottom: 4pt;
+    }
+    p {
+        margin-top: 0;
+        margin-bottom: 8pt;
+    }
+    .header-box {
+        background-color: #0B253A;
+        color: #FFFFFF;
+        padding: 24px;
+        border-radius: 6px;
+        margin-bottom: 24pt;
+    }
+    .header-box h1 {
+        color: #4DD0E1;
+        border-bottom: none;
+        margin: 0 0 8px 0;
+        padding: 0;
+        font-size: 26pt;
+    }
+    .header-box p {
+        color: #E0F7FA;
+        margin: 0;
+        font-size: 12pt;
+    }
+    .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        background-color: #008080;
+        color: #FFFFFF;
+        font-weight: 600;
+        border-radius: 4px;
+        font-size: 9pt;
+        margin-right: 6px;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10pt;
+        margin-bottom: 14pt;
+        font-size: 10pt;
+    }
+    th {
+        background-color: #1A5276;
+        color: #FFFFFF;
+        font-weight: 600;
+        text-align: left;
+        padding: 8px 10px;
+        border: 1px solid #154360;
+    }
+    td {
+        padding: 7px 10px;
+        border: 1px solid #CBD5E0;
+        vertical-align: top;
+    }
+    tr:nth-child(even) {
+        background-color: #F8FAFC;
+    }
+    .callout {
+        background-color: #EBF8FA;
+        border-left: 5px solid #00A896;
+        padding: 12px 16px;
+        margin-top: 10pt;
+        margin-bottom: 12pt;
+        border-radius: 0 4px 4px 0;
+    }
+    .callout-warning {
+        background-color: #FEF9E7;
+        border-left: 5px solid #F39C12;
+        padding: 12px 16px;
+        margin-top: 10pt;
+        margin-bottom: 12pt;
+        border-radius: 0 4px 4px 0;
+    }
+    code {
+        font-family: 'Consolas', 'Courier New', monospace;
+        font-size: 9.5pt;
+        background-color: #EDF2F7;
+        padding: 2px 5px;
+        border-radius: 3px;
+        color: #C0392B;
+    }
+    pre {
+        font-family: 'Consolas', 'Courier New', monospace;
+        font-size: 9pt;
+        background-color: #1A252F;
+        color: #ECEFF1;
+        padding: 12px 14px;
+        border-radius: 5px;
+        line-height: 1.45;
+        overflow-x: auto;
+        margin-top: 8pt;
+        margin-bottom: 12pt;
+    }
+    .diagram-box {
+        font-family: 'Consolas', 'Courier New', monospace;
+        font-size: 8.5pt;
+        background-color: #F4F6F7;
+        color: #1B2631;
+        border: 1.5px solid #BDC3C7;
+        padding: 12px;
+        line-height: 1.35;
+        white-space: pre;
+        margin-top: 8pt;
+        margin-bottom: 12pt;
+    }
+    ul, ol {
+        margin-top: 0;
+        margin-bottom: 8pt;
+        padding-left: 20px;
+    }
+    li {
+        margin-bottom: 4px;
+    }
+    .tag-critical { color: #C0392B; font-weight: bold; }
+    .tag-high { color: #D35400; font-weight: bold; }
+    .tag-medium { color: #F39C12; font-weight: bold; }
+    .tag-low { color: #27AE60; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="header-box">
+    <h1>GhostNet AI</h1>
+    <p><strong>System Architecture & Technical Specification Document</strong></p>
+    <p style="font-size: 10pt; margin-top: 8px; opacity: 0.9;">
+        Pilot Location: Kasimedu Fishing Harbour & Chennai Coastline, Bay of Bengal | Offline-First Marine Conservation Platform
+    </p>
+</div>
+
+<h2>1. Executive Summary & Problem Context</h2>
+<p>
+<strong>GhostNet AI</strong> is an offline-first, geospatial marine conservation platform designed to track, predict the ocean drift trajectory of, and coordinate the recovery of Abandoned, Lost, or Discarded Fishing Gear (ALDFG or "ghost gear"). Ghost gear continues to snare marine organisms indefinitely ("ghost fishing"), ravaging fish stocks, endangering endangered Olive Ridley sea turtles, disrupting navigation channels, and introducing microplastics into marine food webs.
+</p>
+<p>
+Existing marine litter solutions suffer from major architectural bottlenecks: reporting applications require live internet connections that fail past 3 nautical miles offshore, commercial drifting buoys are cost-prohibitive for artisanal fishers, and generalized ocean-drifting plastics models lack ties to actionable fisher reporting, recovery operations, or recycling loops.
+</p>
+<p>
+GhostNet AI bridges this gap with an <strong>edge-to-cloud distributed architecture</strong> tailored for the Chennai coastline (Kasimedu Pilot). It enables artisanal fishers to report lost nets offline, leverages physical Lagrangian particle drift modeling powered by real-time marine meteorological data, packages offline mission packages with cached vector maps, guides recovery vessels without internet, and routes recovered polymers into circular recycling supply chains.
+</p>
+
+<h2>2. End-to-End Operational Lifecycle</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Phase</th>
+            <th>Location / Network</th>
+            <th>Primary Actor</th>
+            <th>System Behavior & Data Transitions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>1. Loss Report</strong></td>
+            <td>Offshore (Zero Connectivity)</td>
+            <td>Fisher</td>
+            <td>Fisher logs gear loss in Mobile App. High-accuracy GPS, loss timestamp, gear attributes (gillnet/nylon/weight), and compressed photo are persisted to local SQLite and queued in <code>local_sync_queue</code>.</td>
+        </tr>
+        <tr>
+            <td><strong>2. Ingestion</strong></td>
+            <td>Harbour / Cellular Range</td>
+            <td>Sync Daemon</td>
+            <td>App detects network connectivity via <code>NetInfo</code>. Triggers idempotent batch upload (<code>POST /api/reports/sync</code>) using <code>client_report_id</code>. Backend ingests report into PostGIS and dispatches simulation task to Celery.</td>
+        </tr>
+        <tr>
+            <td><strong>3. AI Simulation</strong></td>
+            <td>Cloud Worker Cluster</td>
+            <td>Celery Worker</td>
+            <td>Worker fetches ocean currents, 10m wind vectors, wave heights, and tides from Open-Meteo Marine API. Executes 5,000-particle Monte Carlo Lagrangian drift simulation across 24h, 48h, and 72h. Generates GeoJSON heatmap and risk polygons.</td>
+        </tr>
+        <tr>
+            <td><strong>4. Mission Prep</strong></td>
+            <td>Harbour / NGO HQ</td>
+            <td>Recovery Team</td>
+            <td>Team reviews active alerts and accepts mission. Backend bundles GeoJSON heatmap, search waypoints, weather snapshot, and vector tiles into an Offline Mission Package. Downloaded and cached to device.</td>
+        </tr>
+        <tr>
+            <td><strong>5. Navigation</strong></td>
+            <td>Offshore (Zero Connectivity)</td>
+            <td>Recovery Vessel</td>
+            <td>Vessel navigates offshore using MapLibre offline vector tiles and GPS heading. Live vessel coordinates are matched against the predictive drift heatmap and search corridor.</td>
+        </tr>
+        <tr>
+            <td><strong>6. Recovery Log</strong></td>
+            <td>Offshore (Zero Connectivity)</td>
+            <td>Recovery Team</td>
+            <td>Team spots and retrieves net. Logs status (<code>net_recovered</code>), recovered weight, GPS coordinates, and photos into local SQLite.</td>
+        </tr>
+        <tr>
+            <td><strong>7. Circular Flow</strong></td>
+            <td>Port / Recycler Yard</td>
+            <td>Admin / Recycler</td>
+            <td>Upon returning to port, recovery updates sync to PostgreSQL. Net is assigned to recycling partner. Platform computes avoided CO₂e emissions and protected marine fauna metrics.</td>
+        </tr>
+    </tbody>
+</table>
+
+<h2>3. High-Level Distributed System Architecture</h2>
+<div class="diagram-box">
++---------------------------------------------------------------------------------------------------+
+|                                        FIELD EDGE TIER                                            |
+|                                                                                                   |
+|   +---------------------------------------+       +-------------------------------------------+   |
+|   |          Fisher Mobile App            |       |           Recovery Team App               |   |
+|   |  - One-tap Offline Report Form        |       |  - Mission Acceptance & Offline Packager  |   |
+|   |  - Native GPS Polling (Expo Location) |       |  - Offline MapLibre Engine (MBTiles)      |   |
+|   |  - Camera & Image Compression         |       |  - Live GPS Track vs Heatmap Overlay      |   |
+|   +-------------------+-------------------+       +---------------------+---------------------+   |
+|                       |                                                 |                         |
+|                       +-----------------------+-------------------------+                         |
+|                                               |                                                   |
+|                               +---------------v---------------+                                   |
+|                               |     Local SQLite Engine       |                                   |
+|                               |  - local_sync_queue           |                                   |
+|                               |  - local_reports / missions   |                                   |
+|                               +---------------+---------------+                                   |
+|                                               |                                                   |
+|                               +---------------v---------------+                                   |
+|                               |    Client Sync Orchestrator   |                                   |
+|                               |  - NetInfo Network Listener   |                                   |
+|                               |  - Exponential Backoff Queue  |                                   |
+|                               +---------------+---------------+                                   |
++-----------------------------------------------|---------------------------------------------------+
+                                                | HTTPS / TLS 1.3 (Opportunistic Sync)
+                                                v
++---------------------------------------------------------------------------------------------------+
+|                                       INGESTION & GATEWAY TIER                                    |
+|                                                                                                   |
+|   +-------------------------------------------------------------------------------------------+   |
+|   |                           Nginx Reverse Proxy / SSL Termination                           |   |
+|   +---------------------------------------------+---------------------------------------------+   |
+|                                                 |                                                 |
+|   +---------------------------------------------v---------------------------------------------+   |
+|   |                              FastAPI Async REST Application                               |   |
+|   |  - Pydantic v2 Schemas & Validation          - PostGIS Spatial Queries                    |   |
+|   |  - JWT Authentication & RBAC                 - S3/MinIO Presigned Upload Service          |   |
+|   |  - Idempotent Sync Endpoints                 - Mission Packaging Engine                   |   |
+|   +-------------------+-----------------------------------------+-------------------------+---+   |
++-----------------------|-----------------------------------------|-------------------------|-------+
+                        |                                         |                         |
+                        v                                         v                         v
++-----------------------------------+ +-----------------------------------+ +-----------------------+
+|      DATA PERSISTENCE TIER        | |      MESSAGE BROKER & CACHE       | |     OBJECT STORE      |
+|                                   | |                                   | |                       |
+|   PostgreSQL 16 + PostGIS         | |   Redis 7 (In-Memory)             | |   MinIO / AWS S3      |
+|   - Spatial GIST Indexing         | |   - Celery Task Queues            | |   - Gear Photos       |
+|   - LostGearReport & Predictions  | |   - Forecast Query Caching        | |   - Offline Zip Packs |
+|   - Circular Recycler Records     | |   - Distributed Locks             | |   - Vector MBTiles    |
++-----------------------------------+ +-----------------+-----------------+ +-----------------------+
+                                                        |
+                                                        v
++---------------------------------------------------------------------------------------------------+
+|                              DISTRIBUTED COMPUTE & SIMULATION TIER                                |
+|                                                                                                   |
+|   +-------------------------------------------------------------------------------------------+   |
+|   |                                Celery Worker Cluster (Python)                             |   |
+|   |                                                                                           |   |
+|   |   +-----------------------+   +---------------------------+   +-----------------------+   |   |
+|   |   |  Open-Meteo Client    |   | Lagrangian Drift Engine   |   |  Spatial Risk Scorer  |   |   |
+|   |   |  - Ocean Currents u,v |-->| - 5000 Particles / Net    |-->|  - Eco-Sens. Polygons |   |   |
+|   |   |  - 10m Wind & Waves   |   | - Stokes Wave Drift       |   |  - Density Binning    |   |   |
+|   |   |  - Tidal Sea Levels   |   | - Gear Buoyancy Leeway    |   |  - GeoJSON Heatmaps   |   |   |
+|   +---+-----------------------+---+---------------------------+---+-----------------------+---+   |
++---------------------------------------------------------------------------------------------------+
+                                                        |
+                                                        v
++---------------------------------------------------------------------------------------------------+
+|                                  COMMAND & CONTROL WEB PORTAL                                     |
+|                                                                                                   |
+|   React + Vite + Tailwind CSS + MapLibre GL JS Web Dashboard                                      |
+|   - Live Fleet & Lost Gear Tracking              - Interactive Multi-temporal Drift Overlays      |
+|   - Mission Dispatcher & Team Assignment         - Circular Economy & Recycler Metric Visualizer  |
++---------------------------------------------------------------------------------------------------+
+</div>
+
+<h2>4. Edge Client Architecture (React Native & Expo)</h2>
+<p>
+The edge tier operates as an autonomous, self-sufficient offline unit. The core mobile application is architected with clear boundaries between persistence, state synchronization, and map rendering:
+</p>
+
+<h3>4.1 State & Persistence Layer</h3>
+<ul>
+    <li><strong>expo-sqlite (Local Database)</strong>: Replicates a hardened local mirror of the server tables. Operates with write-ahead logging (WAL mode) enabled for rapid offline inserts.</li>
+    <li><strong>Client Sync Queue</strong>: Every mutation (loss report submission, status update, photo capture) creates an immutable record in <code>local_sync_queue</code> with a unique <code>queue_id</code> and a client-side generated <code>client_report_id</code> (UUIDv4).</li>
+    <li><strong>Zustand State Stores</strong>: Lightweight state containers manage active report drafts, network availability states, and downloaded mission packages in memory.</li>
+</ul>
+
+<h3>4.2 Offline Mapping Engine</h3>
+<ul>
+    <li><strong>MapLibre React Native</strong>: Avoids proprietary online-only map dependencies. Uses self-contained vector tile packages (MBTiles) bounded to the Chennai region (Lat: 12.90°N to 13.25°N, Lon: 80.10°E to 80.45°E).</li>
+    <li><strong>GeoJSON Layer Rendering</strong>: Ingests the <code>drift_heatmap_geojson</code> and <code>planned_route_geojson</code> directly into MapLibre Source and Layer components without requiring web tile servers at sea.</li>
+</ul>
+
+<h3>4.3 Offline Synchronization Logic</h3>
+<div class="callout">
+<strong>Sync Guarantee:</strong> The client enforces <em>At-Least-Once Delivery with Server Idempotency</em>. Data loss is mitigated even if the mobile device crashes, loses battery, or undergoes intermittent network transitions.
+</div>
+<ol>
+    <li><strong>Network Monitoring</strong>: <code>NetInfo.addEventListener</code> detects network reachability.</li>
+    <li><strong>Batch Processing</strong>: Upon connectivity restoration, the sync manager queries all entries with <code>status = 'pending'</code> from <code>local_sync_queue</code>.</li>
+    <li><strong>Backoff & Jitter Policy</strong>: Failed transmissions trigger retry attempts according to $t_{\text{wait}} = 2^{\text{retry\_count}} + \text{rand}(0, 1)$ seconds, capped at 5 retries.</li>
+    <li><strong>Conflict Resolution</strong>: Adopts Last-Write-Wins (LWW) with server-authoritative timestamps for updates, while new reports are completely additive and de-duplicated by <code>client_report_id</code>.</li>
+</ol>
+
+<h2>5. AI Drift Prediction & Spatial Risk Engine</h2>
+
+<h3>5.1 Lagrangian Particle Tracking Formulation</h3>
+<p>
+The prediction engine models lost nets as an ensemble of $N = 5,000$ virtual particles initialized at the reported loss coordinate $(\lambda_0, \phi_0)$. Virtual particles account for observational uncertainty by sampling an initial Gaussian position perturbation ($\sigma = 50\text{ m}$).
+</p>
+<p>
+The discrete-time trajectory for particle $i$ over hourly time steps $\Delta t = 3600\text{ s}$ up to $T = 72\text{ hours}$ is governed by:
+</p>
+<pre>x(t + dt) = x(t) + [ u_current + (alpha * u_wind) + (beta * u_wave) + eta ] * dt</pre>
+
+<p>Where the components represent:</p>
+<ul>
+    <li><strong>Ocean Current Velocity ($\vec{u}_{\text{current}}$)</strong>: Vector $(u, v)$ in $\text{m/s}$ fetched from Open-Meteo Marine API at surface depth.</li>
+    <li><strong>Windage Factor ($\alpha$)</strong>: Drag coefficient calibrated by gear buoyancy:
+        <ul>
+            <li>Surface Buoys / Floats: $\alpha = 0.035 - 0.045$ (high surface exposure)</li>
+            <li>Suspended Gillnets: $\alpha = 0.010 - 0.015$ (subsurface drag dominance)</li>
+            <li>Demersal Trawls / Metal Traps: $\alpha = 0.002 - 0.005$ (near-bottom anchor effect)</li>
+        </ul>
+    </li>
+    <li><strong>Stokes Wave Drift ($\beta \cdot \vec{u}_{\text{wave}}$)</strong>: Surface wave momentum calculated from significant wave height ($H_s$), wave direction ($\theta_w$), and peak period ($T_p$) ($\beta \approx 0.015$).</li>
+    <li><strong>Stochastic Diffusion ($\vec{\eta}$)</strong>: Turbulent Brownian diffusion representing unresolved sub-grid eddies:
+        <br><code>eta = Normal(0, sqrt(2 * Kh * dt))</code> where $K_h = 1.0\text{ m}^2/\text{s}$.
+    </li>
+</ul>
+
+<h3>5.2 Probability Density Gridding</h3>
+<p>
+At intervals $t = 24\text{h}, 48\text{h}, 72\text{h}$, particle coordinates are binned into a regular geospatial matrix ($\Delta\lambda, \Delta\phi = 0.002^\circ \approx 220\text{ m}$). Cell density is computed as:
+</p>
+<pre>Density(i, j) = ParticleCount(i, j) / TotalParticles</pre>
+<p>
+Cells are vectorized into closed polygons using GeoPandas and contour algorithms, generating GeoJSON FeatureCollections categorized by probability levels.
+</p>
+
+<h3>5.3 Composite Spatial Risk Scoring Formula</h3>
+<p>
+Predicted drift zones are evaluated against critical coastal habitats and human navigation corridors off Chennai:
+</p>
+<pre>Composite Risk Score = (Density * 0.45) + (Ecological * 0.30) + (FishingActivity * 0.15) + (Navigation * 0.10)</pre>
+
+<table>
+    <thead>
+        <tr>
+            <th>Zone Score</th>
+            <th>Classification</th>
+            <th>Recommended Action</th>
+            <th>Chennai Regional Spatial Benchmark</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>76 – 100</strong></td>
+            <td><span class="tag-critical">CRITICAL</span></td>
+            <td>Immediate Recovery Alert</td>
+            <td>Adyar Estuary mouth (13.00°N, 80.27°E) & Olive Ridley turtle breeding strip</td>
+        </tr>
+        <tr>
+            <td><strong>51 – 75</strong></td>
+            <td><span class="tag-high">HIGH</span></td>
+            <td>Recommend Patrol Mission</td>
+            <td>Kasimedu mechanized trawl lanes & Ennore navigation approaches</td>
+        </tr>
+        <tr>
+            <td><strong>26 – 50</strong></td>
+            <td><span class="tag-medium">MEDIUM</span></td>
+            <td>Add to Watchlist</td>
+            <td>Kovalam-Muttukadu coastal waters & mid-shelf artisanal zones</td>
+        </tr>
+        <tr>
+            <td><strong>0 – 25</strong></td>
+            <td><span class="tag-low">LOW</span></td>
+            <td>Passive Monitoring</td>
+            <td>Deep offshore pelagic waters (>30 nautical miles)</td>
+        </tr>
+    </tbody>
+</table>
+
+<h2>6. Offline Mission Package Specification</h2>
+<p>
+To ensure total autonomous recovery at sea, the backend pre-generates a bundled, signed JSON and vector package when a mission is initialized.
+</p>
+<pre>{
+  "mission_id": "8f9a2b1c-7d4e-4f1a-b2c3-d4e5f6a7b8c9",
+  "report_id": "3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+  "prediction_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+  "offline_map_bbox": [80.10, 12.90, 80.45, 13.25],
+  "offline_map_zoom_levels": [8, 9, 10, 11, 12, 13],
+  "drift_heatmap_geojson": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry": { "type": "Polygon", "coordinates": [...] },
+        "properties": { "risk_level": "critical", "score": 88.5, "forecast_hour": 48 }
+      }
+    ]
+  },
+  "recommended_route_geojson": {
+    "type": "Feature",
+    "geometry": { "type": "LineString", "coordinates": [...] },
+    "properties": { "total_distance_nm": 14.2, "estimated_patrol_hours": 3.5 }
+  },
+  "high_risk_zones_geojson": { ... },
+  "reported_loss_point": { "latitude": 13.1122, "longitude": 80.2937 },
+  "weather_snapshot": {
+    "current_velocity_knots": 1.2,
+    "current_direction_deg": 45.0,
+    "wave_height_m": 1.4,
+    "wind_speed_knots": 12.0
+  },
+  "generated_at": "2026-10-04T07:15:00Z"
+}</pre>
+
+<h2>7. Comprehensive Database Schema</h2>
+
+<h3>7.1 Server-Side PostgreSQL + PostGIS Schema</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Table Name</th>
+            <th>Primary Columns & Types</th>
+            <th>Indexes & Constraints</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>users</code></td>
+            <td>id (UUID), name (VARCHAR), phone (VARCHAR), role (ENUM), boat_id (UUID), created_at (TIMESTAMPTZ)</td>
+            <td>PK(id), UNIQUE(phone)</td>
+            <td>Stores fishers, recovery team personnel, recyclers, and system administrators.</td>
+        </tr>
+        <tr>
+            <td><code>boats</code></td>
+            <td>id (UUID), name (VARCHAR), registration_number (VARCHAR), harbour (VARCHAR), owner_id (UUID)</td>
+            <td>PK(id), UNIQUE(registration_number), FK(owner_id)</td>
+            <td>Vessels registered at Kasimedu and adjacent coastal landing sites.</td>
+        </tr>
+        <tr>
+            <td><code>gear</code></td>
+            <td>id (UUID), gear_type (VARCHAR), material (VARCHAR), weight_kg (FLOAT), qr_code (VARCHAR), owner_id (UUID)</td>
+            <td>PK(id), UNIQUE(qr_code), FK(owner_id)</td>
+            <td>Pre-registered fishing gear inventories with material signatures.</td>
+        </tr>
+        <tr>
+            <td><code>lost_gear_reports</code></td>
+            <td>id (UUID), client_report_id (UUID), gear_id (UUID), reported_by (UUID), loss_location (GEOMETRY(Point, 4326)), loss_time (TIMESTAMPTZ), photo_url (TEXT), sync_status (VARCHAR)</td>
+            <td>PK(id), UNIQUE(client_report_id), GIST(loss_location), FK(reported_by)</td>
+            <td>Lost gear incidents reported by fishers with spatial coordinates.</td>
+        </tr>
+        <tr>
+            <td><code>drift_predictions</code></td>
+            <td>id (UUID), report_id (UUID), forecast_hours (INT), heatmap_geojson (JSONB), predicted_path_geojson (JSONB), high_risk_zones_geojson (JSONB), confidence_score (FLOAT)</td>
+            <td>PK(id), FK(report_id), GIN(heatmap_geojson)</td>
+            <td>Simulation results containing probabilistic drift envelopes.</td>
+        </tr>
+        <tr>
+            <td><code>recovery_missions</code></td>
+            <td>id (UUID), prediction_id (UUID), team_id (UUID), boat_id (UUID), status (ENUM), search_area (GEOMETRY(Polygon, 4326)), planned_route (GEOMETRY(LineString, 4326))</td>
+            <td>PK(id), GIST(search_area), FK(team_id)</td>
+            <td>Active and completed recovery operations at sea.</td>
+        </tr>
+        <tr>
+            <td><code>recovery_updates</code></td>
+            <td>id (UUID), client_update_id (UUID), mission_id (UUID), report_id (UUID), status (ENUM), location (GEOMETRY(Point, 4326)), weight_kg (FLOAT), photo_url (TEXT)</td>
+            <td>PK(id), UNIQUE(client_update_id), GIST(location)</td>
+            <td>At-sea observations (net_spotted, net_recovered, not_found).</td>
+        </tr>
+        <tr>
+            <td><code>recycler_assignments</code></td>
+            <td>id (UUID), recovery_update_id (UUID), recycler_id (UUID), material_type (VARCHAR), weight_kg (FLOAT), status (ENUM)</td>
+            <td>PK(id), FK(recovery_update_id), FK(recycler_id)</td>
+            <td>Circular economy routing records connecting recovered gear to recyclers.</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3>7.2 Mobile Client SQLite Schema</h3>
+<pre>-- Local Action Sync Queue
+CREATE TABLE IF NOT EXISTS local_sync_queue (
+    queue_id TEXT PRIMARY KEY,
+    action TEXT NOT NULL,                -- 'create_lost_gear_report' | 'create_recovery_update'
+    client_entity_id TEXT NOT NULL,      -- UUIDv4 generated on device
+    payload TEXT NOT NULL,               -- JSON serialized request body
+    retry_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'pending',       -- 'pending' | 'syncing' | 'synced' | 'failed'
+    last_error TEXT,
+    created_at TEXT NOT NULL,
+    synced_at TEXT
+);
+
+-- Local Mirror of Loss Reports
+CREATE TABLE IF NOT EXISTS local_reports (
+    id TEXT PRIMARY KEY,
+    client_report_id TEXT UNIQUE,
+    gear_type TEXT,
+    material TEXT,
+    quantity INTEGER,
+    latitude REAL,
+    longitude REAL,
+    loss_time TEXT,
+    photo_uri TEXT,
+    sync_status TEXT,
+    created_at TEXT
+);
+
+-- Local Mission Packages
+CREATE TABLE IF NOT EXISTS local_missions (
+    mission_id TEXT PRIMARY KEY,
+    report_id TEXT,
+    prediction_id TEXT,
+    bounding_box TEXT,
+    heatmap_geojson TEXT,
+    route_geojson TEXT,
+    high_risk_zones_geojson TEXT,
+    status TEXT,
+    downloaded_at TEXT
+);</pre>
+
+<h2>8. Circular Economy Impact Calculation Model</h2>
+<p>
+GhostNet AI quantifies verified ecological and carbon-reduction dividends for stakeholders and sustainability credits:
+</p>
+
+<h3>8.1 Greenhouse Gas Abatement ($\text{CO}_2\text{e}$ Avoided)</h3>
+<pre>CO2e_Avoided (kg) = Recovered_Net_Weight (kg) * Material_Emission_Factor (kg CO2e/kg)</pre>
+<ul>
+    <li><strong>Nylon 6 (PA6) / Nylon 6,6</strong>: $\text{EF} = 6.5\text{ kg CO}_2\text{e per kg}$ (virgin polymer displacement factor)</li>
+    <li><strong>High-Density Polyethylene (HDPE)</strong>: $\text{EF} = 2.1\text{ kg CO}_2\text{e per kg}$</li>
+    <li><strong>Polypropylene (PP) Ropes</strong>: $\text{EF} = 1.9\text{ kg CO}_2\text{e per kg}$</li>
+</ul>
+
+<h3>8.2 Marine Fauna Entanglement Protection Metric</h3>
+<p>
+Based on empirical studies of ALDFG entrapment rates along the Coromandel coast:
+</p>
+<pre>Protected_Marine_Animals = Recovered_Net_Weight (kg) * 0.12</pre>
+<p>
+Where 100 kg of recovered gillnet corresponds to an estimated 12 marine animals (fish, turtles, juvenile sharks) protected from mortality over a 12-month drift horizon.
+</p>
+
+<h2>9. Security, RBAC & Deployment Topology</h2>
+
+<h3>9.1 Authentication & Security Architecture</h3>
+<ul>
+    <li><strong>JWT Bearer Tokenization</strong>: Short-lived access tokens (1 hour) with long-lived refresh tokens (30 days) stored in Expo SecureStore.</li>
+    <li><strong>Role-Based Access Control (RBAC)</strong>:
+        <ul>
+            <li><code>fisher</code>: Create and review personal lost gear reports.</li>
+            <li><code>recovery_team</code>: View regional heatmaps, accept missions, download offline packages, write recovery updates.</li>
+            <li><code>recycler</code>: View assigned materials, update batch processing statuses.</li>
+            <li><code>admin</code>: Global command dashboard, risk model tuning, partner management, system telemetry.</li>
+        </ul>
+    </li>
+    <li><strong>Presigned S3 Uploads</strong>: Mobile clients upload photos directly to object storage via presigned URLs, keeping file payloads off the application API servers.</li>
+</ul>
+
+<h3>9.2 Docker Compose Deployment Architecture</h3>
+<div class="diagram-box">
++---------------------------------------------------------------------------------------+
+|                              DOCKER COMPOSE TOPOLOGY                                  |
+|                                                                                       |
+|   [Port 80/443]  --> [nginx-reverse-proxy]                                            |
+|                           |                                                           |
+|                           +---> [admin-web-dashboard] (Port 3000, Vite React SPA)     |
+|                           +---> [fastapi-api-service] (Port 8000, Python 3.11 ASGI)   |
+|                                     |                                                 |
+|                                     +---> [postgres-postgis] (Port 5432)             |
+|                                     +---> [redis-broker]     (Port 6379)             |
+|                                     +---> [minio-storage]    (Port 9000/9001)        |
+|                                                                                       |
+|   [redis-broker] <-----------> [celery-drift-worker] (Particle Simulation / GIS)      |
+|   [redis-broker] <-----------> [celery-beat-scheduler] (Periodic Met Sync & Sweeper)  |
++---------------------------------------------------------------------------------------+
+</div>
+
+<h2>10. Project Directory & Implementation Structure</h2>
+<pre>ghostnet-ai/
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── auth.py              # User authentication & token issuance
+│   │   │   │   ├── gear.py              # Vessel gear inventory endpoints
+│   │   │   │   ├── reports.py           # Lost gear submission & sync endpoints
+│   │   │   │   ├── predictions.py       # Drift prediction & GeoJSON heatmap queries
+│   │   │   │   ├── missions.py          # Recovery mission coordination & packaging
+│   │   │   │   ├── recycling.py         # Recycler assignments & processing status
+│   │   │   │   └── analytics.py         # Environmental impact & recovery KPIs
+│   │   ├── core/
+│   │   │   ├── config.py            # Environment settings (Pydantic Settings)
+│   │   │   ├── database.py          # SQLAlchemy async session manager
+│   │   │   └── security.py          # Password hashing, JWT encode/decode
+│   │   ├── models/                  # PostGIS SQLAlchemy declarative models
+│   │   ├── schemas/                 # Pydantic v2 validation schemas
+│   │   ├── services/
+│   │   │   ├── marine_meteo.py      # Open-Meteo Marine API client
+│   │   │   ├── drift_engine.py      # 5000-particle Lagrangian drift simulator
+│   │   │   ├── risk_scoring.py      # Spatial polygon intersection & risk scoring
+│   │   │   └── package_bundler.py   # Offline mission pack JSON/archive bundler
+│   │   ├── tasks/                   # Celery asynchronous worker tasks
+│   │   └── main.py                  # FastAPI application entrypoint
+│   ├── Dockerfile
+│   └── requirements.txt
+├── mobile/                          # React Native (Expo) Fisher & Recovery App
+│   ├── src/
+│   │   ├── components/              # Map views, offline badge, report forms
+│   │   ├── database/                # SQLite schema migrations & query helpers
+│   │   ├── hooks/                   # useNetInfo, useLocation, useSyncQueue
+│   │   ├── screens/                 # FisherReportScreen, MissionNavScreen, ImpactScreen
+│   │   ├── services/                # SyncQueueOrchestrator, MapTileCacher
+│   │   └── stores/                  # Zustand global state slices
+│   ├── app.json
+│   └── package.json
+├── web/                             # Command & Control Admin Web Dashboard
+│   ├── src/
+│   │   ├── components/              # MapLibre GL live overlays, analytics charts
+│   │   ├── pages/                   # LiveMap, Missions, Recyclers, Analytics
+│   │   └── api/                     # Axios REST client with JWT interceptors
+│   ├── package.json
+│   └── vite.config.ts
+├── docker-compose.yml
+└── README.md</pre>
+
+<div class="callout" style="margin-top: 24pt;">
+<strong>Document Status:</strong> Approved for Implementation.<br>
+<strong>Pilot Scope:</strong> Kasimedu Fishing Harbour (13.125°N, 80.297°E) to Kovalam (12.79°N, 80.24°E), Tamil Nadu, India.
+</div>
+
+</body>
+</html>

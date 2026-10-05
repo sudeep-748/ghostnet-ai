@@ -1,0 +1,108 @@
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1033{\fonttbl{\f0\fnil\fcharset0 Segoe UI;}{\f1\fnil\fcharset0 Consolas;}}
+{\colortbl ;\red15\green56\blue84;\red0\green128\blue128;\red26\green82\blue118;\red192\green57\blue43;\red243\green156\blue18;\red39\green174\blue96;}
+{\*\generator Riched20 10.0.22621}\viewkind4\uc1 
+\pard\sb120\sa240\qc\cf1\b\f0\fs40 GhostNet AI \'97 Full System Architecture Specification\par
+\pard\sa120\qc\cf2\b0\fs22 Offline-First Marine Conservation & Drift Prediction Platform\par
+\pard\sa240\qc\fs20 Pilot Location: Kasimedu Fishing Harbour & Chennai Coastline, Bay of Bengal\par
+\pard\sa120\cf0\fs22\par
+\cf1\b\fs28 1. Executive Summary & Problem Context\par
+\cf0\b0\fs22 GhostNet AI is an offline-first, geospatial marine conservation platform designed to track, predict the ocean drift trajectory of, and coordinate the recovery of Abandoned, Lost, or Discarded Fishing Gear (ALDFG or "ghost gear").\par
+Ghost gear continues to snare marine organisms indefinitely ("ghost fishing"), ravaging fish stocks, endangering endangered Olive Ridley sea turtles, disrupting navigation channels, and introducing microplastics into marine food webs.\par
+Existing marine litter solutions suffer from major architectural bottlenecks: reporting applications require live internet connections that fail past 3 nautical miles offshore, commercial drifting buoys are cost-prohibitive for artisanal fishers, and generalized ocean-drifting plastics models lack ties to actionable fisher reporting, recovery operations, or recycling loops.\par
+GhostNet AI bridges this gap with an edge-to-cloud distributed architecture tailored for the Chennai coastline (Kasimedu Pilot). It enables artisanal fishers to report lost nets offline, leverages physical Lagrangian particle drift modeling powered by real-time marine meteorological data, packages offline mission packages with cached vector maps, guides recovery vessels without internet, and routes recovered polymers into circular recycling supply chains.\par
+\par
+\cf1\b\fs28 2. End-to-End Operational Lifecycle\par
+\cf0\b0\fs22 1. \b Loss Report (Offshore / Zero Connectivity)\b0 : Fisher logs gear loss in Mobile App. High-accuracy GPS, loss timestamp, gear attributes (gillnet/nylon/weight), and compressed photo are persisted to local SQLite and queued in local_sync_queue.\par
+2. \b Ingestion (Harbour / Cellular Range)\b0 : App detects network connectivity via NetInfo. Triggers idempotent batch upload (POST /api/reports/sync) using client_report_id. Backend ingests report into PostGIS and dispatches simulation task to Celery.\par
+3. \b AI Simulation (Cloud Worker Cluster)\b0 : Worker fetches ocean currents, 10m wind vectors, wave heights, and tides from Open-Meteo Marine API. Executes 5,000-particle Monte Carlo Lagrangian drift simulation across 24h, 48h, and 72h. Generates GeoJSON heatmap and risk polygons.\par
+4. \b Mission Prep (Harbour / NGO HQ)\b0 : Team reviews active alerts and accepts mission. Backend bundles GeoJSON heatmap, search waypoints, weather snapshot, and vector tiles into an Offline Mission Package. Downloaded and cached to device.\par
+5. \b Navigation (Offshore / Zero Connectivity)\b0 : Vessel navigates offshore using MapLibre offline vector tiles and GPS heading. Live vessel coordinates are matched against the predictive drift heatmap and search corridor.\par
+6. \b Recovery Log (Offshore / Zero Connectivity)\b0 : Team spots and retrieves net. Logs status (net_recovered), recovered weight, GPS coordinates, and photos into local SQLite.\par
+7. \b Circular Flow (Port / Recycler Yard)\b0 : Upon returning to port, recovery updates sync to PostgreSQL. Net is assigned to recycling partner. Platform computes avoided CO2e emissions and protected marine fauna metrics.\par
+\par
+\cf1\b\fs28 3. High-Level Distributed Architecture\par
+\cf0\b0\fs22\f1\fs18
++---------------------------------------------------------------------------------------------------+\par
+|                                        FIELD EDGE TIER                                            |\par
+|   +---------------------------------------+       +-------------------------------------------+   |\par
+|   |          Fisher Mobile App            |       |           Recovery Team App               |   |\par
+|   |  - One-tap Offline Report Form        |       |  - Mission Acceptance & Offline Packager  |   |\par
+|   |  - Native GPS Polling (Expo Location) |       |  - Offline MapLibre Engine (MBTiles)      |   |\par
+|   |  - Camera & Image Compression         |       |  - Live GPS Track vs Heatmap Overlay      |   |\par
+|   +-------------------+-------------------+       +---------------------+---------------------+   |\par
+|                       |                                                 |                         |\par
+|                       +-----------------------+-------------------------+                         |\par
+|                                               |                                                   |\par
+|                               +---------------v---------------+                                   |\par
+|                               |     Local SQLite Engine       |                                   |\par
+|                               |  - local_sync_queue           |                                   |\par
+|                               |  - local_reports / missions   |                                   |\par
+|                               +---------------+---------------+                                   |\par
+|                                               |                                                   |\par
+|                               +---------------v---------------+                                   |\par
+|                               |    Client Sync Orchestrator   |                                   |\par
+|                               |  - NetInfo Network Listener   |                                   |\par
+|                               |  - Exponential Backoff Queue  |                                   |\par
+|                               +---------------+---------------+                                   |\par
++-----------------------------------------------|---------------------------------------------------+\par
+                                                | HTTPS / TLS 1.3 (Opportunistic Sync)\par
+                                                v\par
++---------------------------------------------------------------------------------------------------+\par
+|                                       INGESTION & GATEWAY TIER                                    |\par
+|   +-------------------------------------------------------------------------------------------+   |\par
+|   |                           Nginx Reverse Proxy / SSL Termination                           |   |\par
+|   +---------------------------------------------+---------------------------------------------+   |\par
+|                                                 |                                                 |\par
+|   +---------------------------------------------v---------------------------------------------+   |\par
+|   |                              FastAPI Async REST Application                               |\par
+|   |  - Pydantic v2 Validation                    - PostGIS Spatial Queries                    |   |\par
+|   |  - JWT Authentication & RBAC                 - S3/MinIO Presigned Upload Service          |   |\par
+|   |  - Idempotent Sync Endpoints                 - Mission Packaging Engine                   |   |\par
+|   +-------------------+-----------------------------------------+-------------------------+---+   |\par
++-----------------------|-----------------------------------------|-------------------------|-------+\par
+                        |                                         |                         |\par
+                        v                                         v                         v\par
++-----------------------------------+ +-----------------------------------+ +-----------------------+\par
+|      DATA PERSISTENCE TIER        | |      MESSAGE BROKER & CACHE       | |     OBJECT STORE      |\par
+|   PostgreSQL 16 + PostGIS         | |   Redis 7 (In-Memory)             | |   MinIO / AWS S3      |\par
+|   - Spatial GIST Indexing         | |   - Celery Task Queues            | |   - Gear Photos       |\par
+|   - LostGearReport & Predictions  | |   - Forecast Query Caching        | |   - Offline Zip Packs |\par
++-----------------------------------+ +-----------------+-----------------+ +-----------------------+\par
+                                                        |\par
+                                                        v\par
++---------------------------------------------------------------------------------------------------+\par
+|                              DISTRIBUTED COMPUTE & SIMULATION TIER                                |\par
+|   Celery Worker Cluster (Python)                                                                  |\par
+|   - Open-Meteo Marine API Client (Ocean Currents u, v, 10m Wind & Waves, Sea Level)               |\par
+|   - Lagrangian Particle Drift Engine (5000 Particles / Net, Stokes Drift, Gear Buoyancy)          |\par
+|   - Spatial Risk Scorer (Adyar Estuary, Kovalam-Muttukadu, Olive Ridley habitats, Contouring)     |\par
++---------------------------------------------------------------------------------------------------+\par
+\par
+\f0\fs22\cf1\b\fs28 4. AI Drift Prediction Mathematical Engine\par
+\cf0\b0\fs22 The discrete-time trajectory for particle i over hourly time steps dt = 3600s up to T = 72 hours is governed by:\par
+\b x(t + dt) = x(t) + [ u_current + (alpha * u_wind) + (beta * u_wave) + eta ] * dt\b0\par
+Where:\par
+- \b u_current\b0 : Ocean surface current vector (u, v) in m/s from Open-Meteo Marine API.\par
+- \b alpha (Windage Factor)\b0 : Buoys/Floats = 0.040, Submerged Gillnets = 0.012, Sunken Trawl Nets = 0.003.\par
+- \b beta * u_wave (Stokes Wave Drift)\b0 : Momentum derived from wave height (Hs), wave direction, and peak period.\par
+- \b eta (Turbulent Diffusion)\b0 : Stochastic Brownian diffusion: Normal(0, sqrt(2 * Kh * dt)) where Kh = 1.0 m2/s.\par
+\par
+\cf1\b\fs28 5. Composite Spatial Risk Scoring Model\par
+\cf0\b0\fs22\b Risk Score = (Particle Density * 0.45) + (Ecological Sensitivity * 0.30) + (Fishing Activity * 0.15) + (Navigation Route * 0.10)\b0\par
+- \cf4\b Critical (76-100)\cf0\b0 : Adyar Estuary mouth (13.00N, 80.27E) & Olive Ridley turtle breeding strip. Action: Immediate Recovery Alert.\par
+- \cf5\b High (51-75)\cf0\b0 : Kasimedu mechanized trawl lanes & Ennore navigation approaches. Action: Recommend Patrol Mission.\par
+- \b Medium (26-50)\b0 : Kovalam-Muttukadu coastal waters & mid-shelf artisanal zones. Action: Add to Watchlist.\par
+- \cf6\b Low (0-25)\cf0\b0 : Deep offshore pelagic waters (>30 nm). Action: Passive Monitoring.\par
+\par
+\cf1\b\fs28 6. Circular Economy & Carbon Impact Metrics\par
+\cf0\b0\fs22\b CO2e Avoided (kg) = Recovered Net Weight (kg) * Material Emission Factor\b0\par
+- Nylon 6 (PA6): 6.5 kg CO2e / kg\par
+- High-Density Polyethylene (HDPE): 2.1 kg CO2e / kg\par
+- Polypropylene (PP) Ropes: 1.9 kg CO2e / kg\par
+\b Protected Marine Animals = Recovered Net Weight (kg) * 0.12\b0\par
+\par
+\cf1\b\fs28 7. Project Files Generated in Workspace\par
+\cf0\b0\fs22 - \b GhostNet_AI_System_Architecture.doc\b0  (Microsoft Word Document format with formatting and styles)\par
+- \b GhostNet_AI_System_Architecture.rtf\b0  (Rich Text Format opening in MS Word, WordPad, and LibreOffice)\par
+- \b GhostNet_AI_System_Architecture.md\b0  (Full Markdown technical architecture specification)\par
+}
