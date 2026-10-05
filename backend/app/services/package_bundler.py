@@ -146,3 +146,58 @@ class MissionPackageBundler:
                 "target_lon": target["longitude"],
             },
         }
+
+def generate_offline_mission_package(
+    mission: Any,
+    report: Any = None,
+    prediction: Any = None
+) -> Dict[str, Any]:
+    """
+    Compatibility wrapper bridging database models with the offline mission package schema.
+    """
+    loss_lat = getattr(report, "loss_latitude", 13.1122) if report else 13.1122
+    loss_lng = getattr(report, "loss_longitude", 80.2937) if report else 80.2937
+    gear_type = getattr(report, "gear_type", "gillnet") if report else "gillnet"
+
+    heatmap_geojson = getattr(prediction, "heatmap_geojson", None) if prediction else None
+    if not heatmap_geojson:
+        heatmap_geojson = {"type": "FeatureCollection", "features": []}
+
+    path_geojson = getattr(prediction, "predicted_path_geojson", None) if prediction else None
+    if not path_geojson:
+        path_geojson = {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[loss_lng, loss_lat], [loss_lng + 0.03, loss_lat + 0.03]]
+            },
+            "properties": {"name": "Recommended Intercept Route"}
+        }
+
+    high_risk_zones = getattr(prediction, "high_risk_zones_geojson", None) if prediction else None
+    if not high_risk_zones:
+        high_risk_zones = heatmap_geojson
+
+    return {
+        "mission_id": getattr(mission, "id", str(uuid.uuid4())),
+        "report_id": getattr(report, "id", None) if report else None,
+        "prediction_id": getattr(prediction, "id", None) if prediction else None,
+        "offline_map_bbox": DEFAULT_OFFLINE_BBOX,
+        "offline_map_zoom_levels": DEFAULT_OFFLINE_ZOOMS,
+        "drift_heatmap_geojson": heatmap_geojson,
+        "recommended_route_geojson": path_geojson,
+        "high_risk_zones_geojson": high_risk_zones,
+        "reported_loss_point": {
+            "latitude": loss_lat,
+            "longitude": loss_lng
+        },
+        "gear_type": gear_type,
+        "weather_snapshot": {
+            "current_velocity_knots": 1.4,
+            "current_direction_deg": 48.0,
+            "wave_height_m": 1.2,
+            "wind_speed_knots": 11.5,
+            "recorded_at": datetime.now(timezone.utc).isoformat()
+        },
+        "generated_at": datetime.now(timezone.utc).isoformat()
+    }
