@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "GhostNet AI",
+    "slug": "ghostnet-ai-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A192F"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.ghostnet.ai.mobile",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "GhostNet AI requires high-precision GPS to tag the exact coordinates of abandoned ghost fishing nets at sea.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "GhostNet AI requires GPS access to track marine vessel coordinates when cruising across marine zones.",
+        "NSCameraUsageDescription": "GhostNet AI uses the camera to capture photographic evidence of ghost nets and trapped wildlife.",
+        "NSPhotoLibraryUsageDescription": "GhostNet AI accesses photo storage to attach net imagery to incident reports."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A192F"
+      },
+      "package": "org.ghostnet.ai.mobile",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
