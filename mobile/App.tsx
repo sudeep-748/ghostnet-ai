@@ -16,6 +16,9 @@ import { StatusBar } from 'expo-status-bar';
 // Local asset bundled directly inside the mobile app
 const LOGO_IMG = require('./assets/logo.png');
 
+// Live cloud API base URL (Railway production backend)
+const API_BASE = 'https://ghostnet-ai-production.up.railway.app';
+
 type ScreenMode = 'SPLASH' | 'LOGIN_ROLE' | 'FISHERMAN' | 'RESCUE_CREW';
 type Language = 'EN' | 'TA';
 
@@ -707,7 +710,7 @@ export default function App() {
           const queue: any[] = JSON.parse(queueStr);
           if (Array.isArray(queue) && queue.length > 0) {
             for (const item of queue) {
-              await fetch('http://localhost:8000/api/v1/reports/lost-gear', {
+              await fetch(`${API_BASE}/api/v1/reports/lost-gear`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(item)
@@ -724,7 +727,7 @@ export default function App() {
           const accList: UserAccount[] = JSON.parse(unsyncedStr);
           if (Array.isArray(accList) && accList.length > 0) {
             for (const acc of accList) {
-              await fetch('http://localhost:8000/api/v1/auth/register', {
+              await fetch(`${API_BASE}/api/v1/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -745,8 +748,8 @@ export default function App() {
     // 2. Fetch latest live reports & active missions from SQLite backend
     try {
       const [res, missionsRes] = await Promise.all([
-        fetch('http://localhost:8000/api/v1/reports/lost-gear'),
-        fetch('http://localhost:8000/api/v1/missions?status_filter=active').catch(() => null)
+        fetch(`${API_BASE}/api/v1/reports/lost-gear`),
+        fetch(`${API_BASE}/api/v1/missions?status_filter=active`).catch(() => null)
       ]);
 
       let activeMissions: any[] = [];
@@ -979,7 +982,7 @@ export default function App() {
 
       // 1. Try Backend API first (if server is reachable)
       try {
-        const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+        const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1106,7 +1109,7 @@ export default function App() {
 
       // 2. Post directly to Backend API & ghostnet_dev.db!
       try {
-        fetch('http://localhost:8000/api/v1/auth/register', {
+        fetch(`${API_BASE}/api/v1/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1491,7 +1494,7 @@ export default function App() {
 
     // 1. Post to Backend API (or save into offline outbox queue)
     try {
-      fetch('http://localhost:8000/api/v1/reports/lost-gear', {
+      fetch(`${API_BASE}/api/v1/reports/lost-gear`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(reportPayload)
@@ -1540,7 +1543,7 @@ export default function App() {
 
     // 1. Post to backend to record mission in recovery_missions table!
     try {
-      const res = await fetch('http://localhost:8000/api/v1/missions', {
+      const res = await fetch(`${API_BASE}/api/v1/missions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1610,7 +1613,7 @@ export default function App() {
       // Fallback: If mission row wasn't pre-created, create it now before logging update
       if (!currentMissionId) {
         try {
-          const createRes = await fetch('http://localhost:8000/api/v1/missions', {
+          const createRes = await fetch(`${API_BASE}/api/v1/missions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1630,7 +1633,7 @@ export default function App() {
       if (currentMissionId) {
         const { lat, lon } = parseCoordinates(selectedTarget.coords);
         try {
-          await fetch(`http://localhost:8000/api/v1/missions/${currentMissionId}/updates`, {
+          await fetch(`${API_BASE}/api/v1/missions/${currentMissionId}/updates`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
