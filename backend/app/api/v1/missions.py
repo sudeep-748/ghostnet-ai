@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from app.core.database import get_db
-from app.models.models import RecoveryMission, LostGearReport, DriftPrediction, RecoveryUpdate
+from app.models.models import RecoveryMission, LostGearReport, DriftPrediction, RecoveryUpdate, User, Boat
 from app.schemas.schemas import (
     RecoveryMissionCreate, 
     RecoveryMissionResponse,
@@ -19,7 +19,47 @@ router = APIRouter(prefix="/missions", tags=["Recovery Missions"])
 
 @router.post("", response_model=RecoveryMissionResponse, status_code=status.HTTP_201_CREATED)
 def create_mission(mission_in: RecoveryMissionCreate, db: Session = Depends(get_db)):
-    mission = RecoveryMission(**mission_in.model_dump(), status="planned")
+    team_id_val = mission_in.team_id
+    if team_id_val:
+        user_match = db.query(User).filter(
+            (User.id == team_id_val) | (User.name == team_id_val) | (User.phone == team_id_val)
+        ).first()
+        if user_match:
+            team_id_val = user_match.id
+
+    boat_id_val = mission_in.boat_id
+    if boat_id_val:
+        boat_match = db.query(Boat).filter(
+            (Boat.id == boat_id_val) | (Boat.registration_number == boat_id_val) | (Boat.name == boat_id_val)
+        ).first()
+        if boat_match:
+            boat_id_val = boat_match.id
+
+    report_id_val = mission_in.report_id
+    pred_id_val = mission_in.prediction_id
+    if report_id_val:
+        rep_match = db.query(LostGearReport).filter(
+            (LostGearReport.id == report_id_val) | (LostGearReport.client_report_id == report_id_val)
+        ).first()
+        if rep_match:
+            report_id_val = rep_match.id
+            if not pred_id_val:
+                latest_pred = db.query(DriftPrediction).filter(
+                    DriftPrediction.report_id == rep_match.id
+                ).order_by(DriftPrediction.generated_at.desc()).first()
+                if latest_pred:
+                    pred_id_val = latest_pred.id
+
+    mission = RecoveryMission(
+        prediction_id=pred_id_val,
+        report_id=report_id_val,
+        team_id=team_id_val,
+        boat_id=boat_id_val,
+        status="active",
+        search_area_geojson=mission_in.search_area_geojson,
+        planned_route_geojson=mission_in.planned_route_geojson,
+        started_at=datetime.now(timezone.utc)
+    )
     db.add(mission)
     db.commit()
     db.refresh(mission)
@@ -78,13 +118,29 @@ def add_recovery_update(mission_id: str, update_in: RecoveryUpdateCreate, db: Se
     if not update_data.get("timestamp"):
         update_data["timestamp"] = datetime.now(timezone.utc)
 
+    # Link report_id and team_id from parent mission if not specified
+    if not update_data.get("report_id") and mission.report_id:
+        update_data["report_id"] = mission.report_id
+    if not update_data.get("team_id") and mission.team_id:
+        update_data["team_id"] = mission.team_id
+    elif update_data.get("team_id"):
+        user_match = db.query(User).filter(
+            (User.id == update_data["team_id"]) | (User.name == update_data["team_id"]) | (User.phone == update_data["team_id"])
+        ).first()
+        if user_match:
+            update_data["team_id"] = user_match.id
+
     update = RecoveryUpdate(**update_data, sync_status="synced")
     db.add(update)
     
-    # Update mission status if net was recovered
+    # Update mission status and report status if net was recovered
     if update.status == "net_recovered":
         mission.status = "completed"
         mission.completed_at = datetime.now(timezone.utc)
+        if mission.report_id:
+            parent_report = db.query(LostGearReport).filter(LostGearReport.id == mission.report_id).first()
+            if parent_report:
+                parent_report.sync_status = "recovered"
 
     db.commit()
     db.refresh(update)

@@ -82,6 +82,10 @@ class LostGearReportCreate(BaseModel):
     photo_url: Optional[str] = None
     sea_condition: str = "moderate"
     notes: Optional[str] = None
+    threat_level: Optional[str] = "CRITICAL"
+    wildlife_flag: Optional[bool] = False
+    loss_depth_m: Optional[int] = None
+    estimated_weight_kg: Optional[float] = None
 
 class LostGearReportSyncBatch(BaseModel):
     reports: List[LostGearReportCreate]
@@ -102,6 +106,9 @@ class LostGearReportResponse(BaseModel):
     sea_condition: str
     notes: Optional[str] = None
     sync_status: str
+    loss_depth_m: Optional[int] = None
+    estimated_weight_kg: Optional[float] = None
+    threat_level: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -151,6 +158,8 @@ class RecoveryMissionResponse(BaseModel):
     report_id: Optional[str] = None
     team_id: Optional[str] = None
     boat_id: Optional[str] = None
+    team_name: Optional[str] = None
+    boat_name: Optional[str] = None
     status: str
     search_area_geojson: Optional[Dict[str, Any]] = None
     planned_route_geojson: Optional[Dict[str, Any]] = None

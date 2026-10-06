@@ -78,6 +78,30 @@ class LostGearReport(Base):
     reporter = relationship("User", back_populates="reports")
     predictions = relationship("DriftPrediction", back_populates="report", cascade="all, delete-orphan")
 
+    @property
+    def loss_depth_m(self):
+        if not self.notes:
+            return None
+        import re
+        m = re.search(r'Depth:\s*(\d+)', self.notes)
+        return int(m.group(1)) if m else None
+
+    @property
+    def estimated_weight_kg(self):
+        if not self.notes:
+            return None
+        import re
+        m = re.search(r'Weight:\s*(\d+(?:\.\d+)?)', self.notes)
+        return float(m.group(1)) if m else None
+
+    @property
+    def threat_level(self):
+        if not self.notes:
+            return "HIGH"
+        import re
+        m = re.search(r'Threat:\s*([A-Za-z0-9_-]+)', self.notes)
+        return m.group(1) if m else "HIGH"
+
 
 class DriftPrediction(Base):
     __tablename__ = "drift_predictions"
@@ -124,7 +148,20 @@ class RecoveryMission(Base):
     # Relationships
     prediction = relationship("DriftPrediction", back_populates="missions")
     team = relationship("User", back_populates="missions")
+    boat = relationship("Boat")
     updates = relationship("RecoveryUpdate", back_populates="mission")
+
+    @property
+    def team_name(self):
+        if self.team:
+            return self.team.name
+        return self.team_id
+
+    @property
+    def boat_name(self):
+        if self.boat:
+            return self.boat.name or self.boat.registration_number
+        return self.boat_id
 
 
 class RecoveryUpdate(Base):

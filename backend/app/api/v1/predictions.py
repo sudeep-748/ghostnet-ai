@@ -49,12 +49,8 @@ try:
 except ImportError:
     HAS_DRIFT_ENGINE = False
 
-@router.post("/generate", response_model=DriftPredictionResponse, status_code=status.HTTP_201_CREATED)
-def generate_prediction(req: DriftPredictionGenerate, db: Session = Depends(get_db)):
-    report = db.query(LostGearReport).filter(LostGearReport.id == req.report_id).first()
-    if not report:
-        raise HTTPException(status_code=404, detail="Lost gear report not found")
-        
+def generate_prediction_for_report(report: LostGearReport, db: Session, forecast_hours: int = 72, particles: int = 5000) -> DriftPrediction:
+    """Generates Lagrangian drift prediction for a given lost gear report."""
     if HAS_DRIFT_ENGINE:
         try:
             engine = LagrangianDriftEngine()
@@ -62,15 +58,15 @@ def generate_prediction(req: DriftPredictionGenerate, db: Session = Depends(get_
                 origin_lat=report.loss_latitude,
                 origin_lon=report.loss_longitude,
                 gear_type=report.gear_type or "gillnet",
-                forecast_hours=req.forecast_hours,
-                num_particles=req.particles,
+                forecast_hours=forecast_hours,
+                num_particles=particles,
             )
             heatmap = sim_result.drift_heatmap_geojson
             path_geojson = sim_result.predicted_path_geojson
             high_risk_zones = getattr(sim_result, 'high_risk_zones_geojson', heatmap)
             confidence = sim_result.confidence_score
-        except Exception as e:
-            heatmap = create_mock_drift_geojson(report.loss_latitude, report.loss_longitude, req.forecast_hours)
+        except Exception:
+            heatmap = create_mock_drift_geojson(report.loss_latitude, report.loss_longitude, forecast_hours)
             path_geojson = {
                 "type": "Feature",
                 "geometry": {
@@ -82,7 +78,7 @@ def generate_prediction(req: DriftPredictionGenerate, db: Session = Depends(get_
             high_risk_zones = heatmap
             confidence = 0.86
     else:
-        heatmap = create_mock_drift_geojson(report.loss_latitude, report.loss_longitude, req.forecast_hours)
+        heatmap = create_mock_drift_geojson(report.loss_latitude, report.loss_longitude, forecast_hours)
         path_geojson = {
             "type": "Feature",
             "geometry": {
@@ -96,8 +92,8 @@ def generate_prediction(req: DriftPredictionGenerate, db: Session = Depends(get_
 
     prediction = DriftPrediction(
         report_id=report.id,
-        forecast_hours=req.forecast_hours,
-        particles=req.particles,
+        forecast_hours=forecast_hours,
+        particles=particles,
         heatmap_geojson=heatmap,
         predicted_path_geojson=path_geojson,
         high_risk_zones_geojson=high_risk_zones,
@@ -109,6 +105,14 @@ def generate_prediction(req: DriftPredictionGenerate, db: Session = Depends(get_
     db.commit()
     db.refresh(prediction)
     return prediction
+
+@router.post("/generate", response_model=DriftPredictionResponse, status_code=status.HTTP_201_CREATED)
+def generate_prediction(req: DriftPredictionGenerate, db: Session = Depends(get_db)):
+    report = db.query(LostGearReport).filter(LostGearReport.id == req.report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Lost gear report not found")
+        
+    return generate_prediction_for_report(report, db, req.forecast_hours, req.particles)
 
 @router.get("/{prediction_id}", response_model=DriftPredictionResponse)
 def get_prediction(prediction_id: str, db: Session = Depends(get_db)):
