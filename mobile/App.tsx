@@ -516,7 +516,15 @@ export default function App() {
   // Rescue Crew State
   // -------------------------------------------------------------
   const [crewTab, setCrewTab] = useState<'REPORTS' | 'MISSION'>('REPORTS');
-  const [selectedTarget, setSelectedTarget] = useState<RescueTarget | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<RescueTarget | null>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('ghostnet_selected_target');
+        if (saved) return JSON.parse(saved);
+      }
+    } catch (e) {}
+    return null;
+  });
   const [activeMissionId, setActiveMissionId] = useState<string | null>(() => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -661,6 +669,28 @@ export default function App() {
     } catch (e) {}
     return [];
   });
+
+  // Auto-restore officer's active in-progress mission on login or re-connection
+  useEffect(() => {
+    if (!selectedTarget && targets.length > 0 && currentUser) {
+      const myActive = targets.find((tgt) => {
+        const teamMatch =
+          tgt.assignedTeam?.toLowerCase().trim() === currentUser.name?.toLowerCase().trim() ||
+          tgt.assignedTeam?.toLowerCase().trim() === currentUser.username?.toLowerCase().trim();
+        const boatMatch =
+          tgt.assignedBoat?.toLowerCase().trim() === currentUser.boatTag?.toLowerCase().trim();
+        return tgt.isAssigned && (teamMatch || boatMatch);
+      });
+      if (myActive) {
+        setSelectedTarget(myActive);
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem('ghostnet_selected_target', JSON.stringify(myActive));
+          }
+        } catch (e) {}
+      }
+    }
+  }, [targets, currentUser, selectedTarget]);
 
   // Storage helper for persistence across refreshes & app re-opens
   const saveSession = (user: UserAccount | null) => {
@@ -1832,6 +1862,7 @@ export default function App() {
         if (typeof window !== 'undefined' && window.localStorage) {
           window.localStorage.setItem('ghostnet_pending_targets', JSON.stringify(remainingTargets));
           window.localStorage.removeItem('ghostnet_active_mission_id');
+          window.localStorage.removeItem('ghostnet_selected_target');
         }
       } catch (e) {}
 
@@ -2719,134 +2750,153 @@ export default function App() {
                 </Text>
               </View>
             ) : (
-              targets.map((tgt) => (
-                <View key={tgt.id} style={styles.targetCardDark}>
-                  <View style={[styles.targetSideStrip, { backgroundColor: tgt.accentColor }]} />
-                  <View style={styles.targetCardHeader}>
-                    <View style={styles.targetPriorityBadge}>
-                      <View style={[styles.targetPriorityDot, { backgroundColor: tgt.accentColor }]} />
-                      <Text style={[styles.targetPriorityTxt, { color: tgt.accentColor }]}>
-                        {tgt.priorityLabel} • {tgt.reportedAgo}
-                      </Text>
-                    </View>
-                    <Text style={styles.targetDistanceTxt}>{tgt.distanceNm}</Text>
-                  </View>
+              targets.map((tgt) => {
+                const isThisMyMission =
+                  tgt.isMyMission ||
+                  (tgt.isAssigned && Boolean(
+                    (tgt.assignedTeam && (
+                      tgt.assignedTeam.toLowerCase().trim() === currentUser?.name?.toLowerCase().trim() ||
+                      tgt.assignedTeam.toLowerCase().trim() === currentUser?.username?.toLowerCase().trim()
+                    )) ||
+                    (tgt.assignedBoat && (
+                      tgt.assignedBoat.toLowerCase().trim() === currentUser?.boatTag?.toLowerCase().trim()
+                    ))
+                  ));
 
-                  <View style={{ paddingLeft: 4 }}>
-                    <Text style={styles.targetGearName}>{tgt.gearName}</Text>
-                    <Text style={styles.targetGearDesc}>{tgt.description}</Text>
-                  </View>
-
-                  {/* Telemetry Metric Badges */}
-                  <View style={styles.telemetryGrid}>
-                    <View style={styles.telemetryCell}>
-                      <Text style={styles.telemetryCellLabel}>Est. Depth</Text>
-                      <Text style={styles.telemetryCellValue}>{tgt.depthM} m</Text>
-                    </View>
-                    <View style={styles.telemetryCell}>
-                      <Text style={styles.telemetryCellLabel}>Mass</Text>
-                      <Text style={styles.telemetryCellValue}>{tgt.massKg} Tons</Text>
-                    </View>
-                    <View style={styles.telemetryCell}>
-                      <Text style={styles.telemetryCellLabel}>Material</Text>
-                      <Text style={[styles.telemetryCellValue, { color: '#6ff6ff' }]}>
-                        {tgt.material ? tgt.material.toUpperCase() : 'NYLON'}
-                      </Text>
-                    </View>
-                    <View style={styles.telemetryCell}>
-                      <Text style={styles.telemetryCellLabel}>Drift State</Text>
-                      <Text style={[styles.telemetryCellValue, { color: tgt.buoyancy?.includes('Float') ? '#38bdf8' : '#f59e0b' }]}>
-                        {tgt.buoyancy?.includes('Float') ? 'FLOATING' : 'SINKING'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Tactical Coordinates Readout */}
-                  <View style={styles.coordsReadoutRow}>
-                    <Text style={{ fontSize: 16 }}>🧭</Text>
-                    <Text style={styles.coordsReadoutVal}>{tgt.coords}</Text>
-                    <Text style={styles.aisVectorText}>{tgt.aisVector}</Text>
-                  </View>
-
-                  {/* Active Mission Notice for Claimed Targets */}
-                  {tgt.isAssigned && (
-                    <View
-                      style={{
-                        marginHorizontal: 4,
-                        marginBottom: 10,
-                        padding: 10,
-                        borderRadius: 8,
-                        backgroundColor: tgt.isMyMission ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                        borderWidth: 1,
-                        borderColor: tgt.isMyMission ? '#10b981' : '#3b82f6',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 8
-                      }}
-                    >
-                      <Text style={{ fontSize: 18 }}>{tgt.isMyMission ? '🟢' : '👮'}</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: tgt.isMyMission ? '#6ee7b7' : '#93c5fd', fontSize: 13, fontWeight: 'bold' }}>
-                          {tgt.isMyMission
-                            ? `Mission Claimed by You (${tgt.assignedBoat || currentUser.boatTag})`
-                            : `Rescuing by ${tgt.assignedTeam} (${tgt.assignedBoat})`}
+                return (
+                  <View key={tgt.id} style={styles.targetCardDark}>
+                    <View style={[styles.targetSideStrip, { backgroundColor: tgt.accentColor }]} />
+                    <View style={styles.targetCardHeader}>
+                      <View style={styles.targetPriorityBadge}>
+                        <View style={[styles.targetPriorityDot, { backgroundColor: tgt.accentColor }]} />
+                        <Text style={[styles.targetPriorityTxt, { color: tgt.accentColor }]}>
+                          {tgt.priorityLabel} • {tgt.reportedAgo}
                         </Text>
-                        <Text style={{ color: '#cbd5e1', fontSize: 11, marginTop: 2 }}>
-                          {tgt.isMyMission
-                            ? 'Vessel en route. Tap below to continue your live navigation.'
-                            : 'This rescue team is actively on course. Please choose another unassigned target.'}
+                      </View>
+                      <Text style={styles.targetDistanceTxt}>{tgt.distanceNm}</Text>
+                    </View>
+
+                    <View style={{ paddingLeft: 4 }}>
+                      <Text style={styles.targetGearName}>{tgt.gearName}</Text>
+                      <Text style={styles.targetGearDesc}>{tgt.description}</Text>
+                    </View>
+
+                    {/* Telemetry Metric Badges */}
+                    <View style={styles.telemetryGrid}>
+                      <View style={styles.telemetryCell}>
+                        <Text style={styles.telemetryCellLabel}>Est. Depth</Text>
+                        <Text style={styles.telemetryCellValue}>{tgt.depthM} m</Text>
+                      </View>
+                      <View style={styles.telemetryCell}>
+                        <Text style={styles.telemetryCellLabel}>Mass</Text>
+                        <Text style={styles.telemetryCellValue}>{tgt.massKg} Tons</Text>
+                      </View>
+                      <View style={styles.telemetryCell}>
+                        <Text style={styles.telemetryCellLabel}>Material</Text>
+                        <Text style={[styles.telemetryCellValue, { color: '#6ff6ff' }]}>
+                          {tgt.material ? tgt.material.toUpperCase() : 'NYLON'}
+                        </Text>
+                      </View>
+                      <View style={styles.telemetryCell}>
+                        <Text style={styles.telemetryCellLabel}>Drift State</Text>
+                        <Text style={[styles.telemetryCellValue, { color: tgt.buoyancy?.includes('Float') ? '#38bdf8' : '#f59e0b' }]}>
+                          {tgt.buoyancy?.includes('Float') ? 'FLOATING' : 'SINKING'}
                         </Text>
                       </View>
                     </View>
-                  )}
 
-                  {/* Action Button: Continue (Mine) vs Locked (Other Team) vs Accept (Unassigned) */}
-                  {tgt.isAssigned ? (
-                    tgt.isMyMission ? (
-                      <TouchableOpacity
-                        style={[styles.acceptMissionBtn, { backgroundColor: '#10b981' }]}
-                        onPress={() => {
-                          setSelectedTarget(tgt);
-                          setCrewTab('MISSION');
+                    {/* Tactical Coordinates Readout */}
+                    <View style={styles.coordsReadoutRow}>
+                      <Text style={{ fontSize: 16 }}>🧭</Text>
+                      <Text style={styles.coordsReadoutVal}>{tgt.coords}</Text>
+                      <Text style={styles.aisVectorText}>{tgt.aisVector}</Text>
+                    </View>
+
+                    {/* Active Mission Notice for Claimed Targets */}
+                    {tgt.isAssigned && (
+                      <View
+                        style={{
+                          marginHorizontal: 4,
+                          marginBottom: 10,
+                          padding: 10,
+                          borderRadius: 8,
+                          backgroundColor: isThisMyMission ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                          borderWidth: 1,
+                          borderColor: isThisMyMission ? '#10b981' : '#3b82f6',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8
                         }}
                       >
-                        <Text style={{ fontSize: 18 }}>🧭</Text>
-                        <Text style={[styles.acceptMissionText, { color: '#ffffff' }]}>
-                          Continue Active Mission ➔
-                        </Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <View
-                        style={[
-                          styles.acceptMissionBtn,
-                          {
-                            backgroundColor: 'rgba(30, 41, 59, 0.85)',
-                            borderColor: '#3b82f6',
-                            borderWidth: 1.5,
-                            opacity: 0.95
-                          }
-                        ]}
-                      >
-                        <Text style={{ fontSize: 16 }}>🔒</Text>
-                        <Text style={[styles.acceptMissionText, { color: '#93c5fd', fontSize: 13 }]}>
-                          Team In Action ({tgt.assignedTeam}) • Choose Another Target
-                        </Text>
+                        <Text style={{ fontSize: 18 }}>{isThisMyMission ? '🟢' : '👮'}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: isThisMyMission ? '#6ee7b7' : '#93c5fd', fontSize: 13, fontWeight: 'bold' }}>
+                            {isThisMyMission
+                              ? `Mission Claimed by You (${tgt.assignedBoat || currentUser.boatTag})`
+                              : `Rescuing by ${tgt.assignedTeam} (${tgt.assignedBoat})`}
+                          </Text>
+                          <Text style={{ color: '#cbd5e1', fontSize: 11, marginTop: 2 }}>
+                            {isThisMyMission
+                              ? 'Vessel en route. Tap below to continue your live navigation.'
+                              : 'This rescue team is actively on course. Please choose another unassigned target.'}
+                          </Text>
+                        </View>
                       </View>
-                    )
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.acceptMissionBtn}
-                      onPress={() => {
-                        setSelectedTarget(tgt);
-                        setShowPreDepartureModal(true);
-                      }}
-                    >
-                      <Text style={{ fontSize: 18 }}>⚡</Text>
-                      <Text style={styles.acceptMissionText}>{t('acceptMissionBtn')}</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))
+                    )}
+
+                    {/* Action Button: Continue (Mine) vs Locked (Other Team) vs Accept (Unassigned) */}
+                    {tgt.isAssigned ? (
+                      isThisMyMission ? (
+                        <TouchableOpacity
+                          style={[styles.acceptMissionBtn, { backgroundColor: '#10b981' }]}
+                          onPress={() => {
+                            setSelectedTarget(tgt);
+                            try {
+                              if (typeof window !== 'undefined' && window.localStorage) {
+                                window.localStorage.setItem('ghostnet_selected_target', JSON.stringify(tgt));
+                              }
+                            } catch (e) {}
+                            setCrewTab('MISSION');
+                          }}
+                        >
+                          <Text style={{ fontSize: 18 }}>🧭</Text>
+                          <Text style={[styles.acceptMissionText, { color: '#ffffff' }]}>
+                            Continue Active Mission ➔
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View
+                          style={[
+                            styles.acceptMissionBtn,
+                            {
+                              backgroundColor: 'rgba(30, 41, 59, 0.85)',
+                              borderColor: '#3b82f6',
+                              borderWidth: 1.5,
+                              opacity: 0.95
+                            }
+                          ]}
+                        >
+                          <Text style={{ fontSize: 16 }}>🔒</Text>
+                          <Text style={[styles.acceptMissionText, { color: '#93c5fd', fontSize: 13 }]}>
+                            Team In Action ({tgt.assignedTeam}) • Choose Another Target
+                          </Text>
+                        </View>
+                      )
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.acceptMissionBtn}
+                        onPress={() => {
+                          setSelectedTarget(tgt);
+                          setShowPreDepartureModal(true);
+                        }}
+                      >
+                        <Text style={{ fontSize: 18 }}>⚡</Text>
+                        <Text style={styles.acceptMissionText}>{t('acceptMissionBtn')}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })
             )}
 
             {/* Environmental Summary */}
