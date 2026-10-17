@@ -387,67 +387,21 @@ export default function App() {
   // Localization translator helper
   const t = (k: keyof typeof I18N.EN) => I18N[language][k] || I18N.EN[k];
 
-  // Default pre-seeded accounts (synced with ghostnet_dev.db)
-  const DEFAULT_ACCOUNTS: UserAccount[] = [
-    {
-      name: 'sudeep',
-      username: 'sudeep',
-      password: '123456789',
-      role: 'RESCUE_CREW',
-      boatTag: 'Poseidon Alpha (MM-01)',
-      phone: '9171623000',
-      port: 'Chennai Coastal Patrol Station'
-    },
-    {
-      name: 'hari',
-      username: 'hari',
-      password: '123456789',
-      role: 'FISHERMAN',
-      boatTag: 'IND-TN-02-MM-4410',
-      phone: '6382833149',
-      port: 'Kasimedu Coastal Harbour'
-    },
-    {
-      name: 'Selvam Ramanathan',
-      username: 'selvam_04',
-      password: 'password123',
-      role: 'FISHERMAN',
-      boatTag: 'TN-02-MM-4410',
-      phone: '+91 98401 23456',
-      port: 'Kasimedu Harbour Port'
-    },
-    {
-      name: 'Capt. Michael Raj',
-      username: 'capt_michael',
-      password: 'password123',
-      role: 'RESCUE_CREW',
-      boatTag: 'Poseidon Alpha (MM-01)',
-      phone: '+91 98405 88990',
-      port: 'Chennai Coastal Station'
-    }
-  ];
+  // Default pre-seeded accounts: empty for fresh user testing
+  const DEFAULT_ACCOUNTS: UserAccount[] = [];
 
-  // Load persistent accounts from localStorage, merged with DEFAULT_ACCOUNTS
+  // Load persistent accounts from localStorage
   const [accounts, setAccounts] = useState<UserAccount[]>(() => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         const saved = window.localStorage.getItem('ghostnet_registered_accounts');
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            // Merge defaults with saved so database accounts are always present
-            const merged = [...DEFAULT_ACCOUNTS];
-            parsed.forEach((p: UserAccount) => {
-              if (!merged.some((m) => m.username === p.username)) {
-                merged.push(p);
-              }
-            });
-            return merged;
-          }
+          if (Array.isArray(parsed)) return parsed;
         }
       }
     } catch (e) {}
-    return DEFAULT_ACCOUNTS;
+    return [];
   });
 
   // Current Logged-in User Session
@@ -1245,6 +1199,31 @@ export default function App() {
       if (selectedRole === 'FISHERMAN') setScreen('FISHERMAN');
       else setScreen('RESCUE_CREW');
     }
+  };
+
+  const handleClearAllData = async () => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.clear();
+      }
+    } catch (e) {}
+    setAccounts([]);
+    setReports([]);
+    setTargets([]);
+    setLoginUsername('');
+    setLoginPassword('');
+    setRegFullName('');
+    setRegUsername('');
+    setRegPhone('');
+    setRegPassword('');
+    try {
+      await fetch(`${API_BASE}/api/v1/auth/reset-database`, { method: 'POST' });
+    } catch (e) {}
+    showToast(
+      language === 'TA'
+        ? '🗑️ அனைத்து தரவுகளும் அழிக்கப்பட்டன! புதிய கணக்கு உருவாக்க தயார்.'
+        : '🗑️ All database & local data wiped clean! Ready for new user.'
+    );
   };
 
   // Helper: parse latitude and longitude from coordinate string
@@ -2139,6 +2118,25 @@ export default function App() {
             <Text style={{ color: '#00f2fe', fontSize: 14 }}>🌐</Text>
             <Text style={styles.langPillText}>
               {language === 'EN' ? 'தமிழ் (Tamil)' : 'English'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Wipe Database & Local Cache Button */}
+          <TouchableOpacity
+            style={{
+              marginTop: 18,
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              alignItems: 'center',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: 'rgba(239, 68, 68, 0.3)'
+            }}
+            onPress={handleClearAllData}
+          >
+            <Text style={{ color: '#f87171', fontSize: 13, fontWeight: '700' }}>
+              🗑️ Clear Database & Reset All Data
             </Text>
           </TouchableOpacity>
         </ScrollView>
