@@ -25,11 +25,16 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(user_in: UserCreate, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(
-        (User.phone == user_in.phone) | (User.name == user_in.name)
-    ).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="User with this name or phone already registered")
+    clean_phone = user_in.phone.strip()
+    clean_name = user_in.name.strip()
+    
+    existing_phone = db.query(User).filter(User.phone == clean_phone).first()
+    if existing_phone:
+        raise HTTPException(status_code=400, detail="This phone number is already registered. Please log in.")
+        
+    existing_name = db.query(User).filter(User.name == clean_name).first()
+    if existing_name:
+        raise HTTPException(status_code=400, detail="This username is already taken. Please choose another username.")
     
     user_id = str(uuid.uuid4())
     boat_reg = user_in.boat_id or ("IND-TN-02-MM-4410" if user_in.role == "fisher" else "Poseidon Alpha (MM-01)")
@@ -51,8 +56,8 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
     
     new_user = User(
         id=user_id,
-        name=user_in.name,
-        phone=user_in.phone,
+        name=clean_name,
+        phone=clean_phone,
         hashed_password=get_password_hash(user_in.password),
         role=user_in.role,
         boat_id=boat.registration_number
@@ -64,13 +69,19 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 def login(login_data: UserLogin, db: Session = Depends(get_db)):
+    clean_identifier = login_data.phone.strip()
     user = db.query(User).filter(
-        (User.phone == login_data.phone) | (User.name == login_data.phone)
+        (User.phone == clean_identifier) | (User.name == clean_identifier)
     ).first()
-    if not user or not verify_password(login_data.password, user.hashed_password):
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account not found. Please create an account first."
+        )
+    if not verify_password(login_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect phone number or password",
+            detail="Incorrect password. Please check your password and try again."
         )
     access_token = create_access_token(subject=user.id)
     return {

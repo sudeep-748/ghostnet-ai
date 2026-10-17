@@ -1000,8 +1000,20 @@ export default function App() {
       const qUser = loginUsername.trim();
       const qPass = loginPassword.trim();
 
-      if (!qUser || !qPass) {
-        showToast('Please enter both username and password.');
+      if (!qUser) {
+        showToast(
+          language === 'TA'
+            ? '⚠️ பயனர்பெயர் அல்லது அலைபேசி எண்ணை உள்ளிடவும்.'
+            : '⚠️ Please enter your mobile number or username.'
+        );
+        return;
+      }
+      if (!qPass) {
+        showToast(
+          language === 'TA'
+            ? '⚠️ கடவுச்சொல்லை உள்ளிடவும்.'
+            : '⚠️ Please enter your password.'
+        );
         return;
       }
 
@@ -1041,10 +1053,36 @@ export default function App() {
               }
             } catch (e) {}
 
-            showToast(`Welcome back, ${apiUser.name}!`);
+            showToast(`✅ Welcome back, ${apiUser.name}!`);
             syncWithBackend();
             if (apiUser.role === 'FISHERMAN') setScreen('FISHERMAN');
             else setScreen('RESCUE_CREW');
+            return;
+          }
+        } else if (response.status === 401) {
+          // Explicit wrong password from backend
+          showToast(
+            language === 'TA'
+              ? '❌ கடவுச்சொல் தவறானது! மீண்டும் சரிபார்க்கவும்.'
+              : '❌ Incorrect password! Please check your passcode.'
+          );
+          return;
+        } else if (response.status === 404) {
+          // Explicit user not found on backend -> check local offline storage
+          const userQuery = qUser.toLowerCase();
+          const allAvailableAccounts = [...DEFAULT_ACCOUNTS, ...accounts];
+          const localExists = allAvailableAccounts.find(
+            (acc) =>
+              acc.username.toLowerCase() === userQuery ||
+              acc.name.toLowerCase() === userQuery ||
+              acc.phone.replace(/\D/g, '') === userQuery.replace(/\D/g, '')
+          );
+          if (!localExists) {
+            showToast(
+              language === 'TA'
+                ? `❌ கணக்கு "${qUser}" காணப்படவில்லை! தயவுசெய்து புதிய கணக்கை உருவாக்கவும்.`
+                : `❌ Account not found for "${qUser}". Please create an account first.`
+            );
             return;
           }
         }
@@ -1074,15 +1112,15 @@ export default function App() {
           setCurrentUser(userExists);
           saveSession(userExists);
           syncWithBackend();
-          showToast(`Welcome back, ${userExists.name}!`);
+          showToast(`✅ Welcome back, ${userExists.name}!`);
           if (userExists.role === 'FISHERMAN') setScreen('FISHERMAN');
           else setScreen('RESCUE_CREW');
           return;
         } else {
           showToast(
             language === 'TA'
-              ? 'கடவுச்சொல் தவறானது! மீண்டும் முயற்சிக்கவும்.'
-              : 'Incorrect password! Please check your passcode.'
+              ? '❌ கடவுச்சொல் தவறானது! மீண்டும் சரிபார்க்கவும்.'
+              : '❌ Incorrect password! Please check your passcode.'
           );
           return;
         }
@@ -1091,33 +1129,68 @@ export default function App() {
       // If neither backend nor local cache found the user
       showToast(
         language === 'TA'
-          ? 'பயனர் கிடைக்கவில்லை! தயவுசெய்து புதிய கணக்கை உருவாக்கவும்.'
-          : `Account not found for "${qUser}". Please create an account first.`
+          ? `❌ கணக்கு "${qUser}" காணப்படவில்லை! தயவுசெய்து புதிய கணக்கை உருவாக்கவும்.`
+          : `❌ Account not found for "${qUser}". Please create an account first.`
       );
     } else {
       // REGISTER ACCOUNT
       if (!regFullName.trim()) {
-        showToast('Please enter your full name.');
+        showToast(language === 'TA' ? '⚠️ முழு பெயரை உள்ளிடவும்.' : '⚠️ Please enter your full name.');
         return;
       }
       if (!regUsername.trim()) {
-        showToast('Please create a username / operator ID.');
+        showToast(language === 'TA' ? '⚠️ பயனர்பெயரை உள்ளிடவும்.' : '⚠️ Please create a username.');
         return;
       }
-      if (!regPassword.trim()) {
-        showToast('Please create a secure password.');
+      if (!regPhone.trim()) {
+        showToast(language === 'TA' ? '⚠️ அலைபேசி எண்ணை உள்ளிடவும்.' : '⚠️ Please enter your mobile phone number.');
+        return;
+      }
+      if (!regPassword.trim() || regPassword.trim().length < 4) {
+        showToast(
+          language === 'TA'
+            ? '⚠️ கடவுச்சொல் குறைந்தது 4 எழுத்துக்கள் இருக்க வேண்டும்.'
+            : '⚠️ Password must be at least 4 characters long.'
+        );
         return;
       }
 
-      const userIdentifier = regPhone.trim() || regUsername.trim();
+      const allAvailableAccounts = [...DEFAULT_ACCOUNTS, ...accounts];
+      const cleanPhone = regPhone.trim().replace(/\D/g, '');
+      const cleanUser = regUsername.trim().toLowerCase();
+
+      const existingAcc = allAvailableAccounts.find(
+        (a) =>
+          a.username.toLowerCase() === cleanUser ||
+          a.phone.replace(/\D/g, '') === cleanPhone
+      );
+
+      if (existingAcc) {
+        if (existingAcc.username.toLowerCase() === cleanUser) {
+          showToast(
+            language === 'TA'
+              ? '❌ இந்த பயனர்பெயர் ஏற்கனவே பயன்பாட்டில் உள்ளது! வேறு பெயரை தேர்ந்தெடுக்கவும்.'
+              : '❌ This username is already taken! Please choose another username.'
+          );
+        } else {
+          showToast(
+            language === 'TA'
+              ? '❌ இந்த அலைபேசி எண் ஏற்கனவே பதிவு செய்யப்பட்டுள்ளது! உள்நுழையவும்.'
+              : '❌ This phone number is already registered! Please switch to Log In.'
+          );
+        }
+        return;
+      }
+
+      const userIdentifier = regPhone.trim();
       const newAccount: UserAccount = {
         name: regFullName.trim(),
-        username: regUsername.trim().toLowerCase(),
+        username: cleanUser,
         password: regPassword,
         role: selectedRole,
-        boatTag: regBoatTag.trim() || (selectedRole === 'FISHERMAN' ? 'TN-02-MM-REG' : 'Rescue-Delta'),
+        boatTag: regBoatTag.trim() || (selectedRole === 'FISHERMAN' ? 'IND-TN-02-MM-4410' : 'Poseidon Alpha (MM-01)'),
         phone: userIdentifier,
-        port: 'Kasimedu Harbour Port'
+        port: selectedRole === 'FISHERMAN' ? 'Kasimedu Coastal Harbour' : 'Chennai Coastal Patrol Station'
       };
 
       // 1. Save in local state and persistent storage
@@ -1142,11 +1215,16 @@ export default function App() {
             phone: userIdentifier,
             password: newAccount.password,
             role: selectedRole === 'FISHERMAN' ? 'fisher' : 'recovery_team',
-            boat_id: newAccount.boatTag || (selectedRole === 'FISHERMAN' ? 'IND-TN-02-MM-4410' : 'Poseidon Alpha (MM-01)')
+            boat_id: newAccount.boatTag
           })
         })
-          .then((res) => {
-            if (res.ok) {
+          .then(async (res) => {
+            if (!res.ok) {
+              const errData = await res.json().catch(() => null);
+              if (errData && errData.detail) {
+                showToast(`⚠️ Server Note: ${errData.detail}`);
+              }
+            } else {
               console.log('User synced to SQLite database!');
             }
           })
@@ -1156,10 +1234,11 @@ export default function App() {
       } catch (err) {
         // App continues offline
       }
+
       showToast(
         language === 'TA'
-          ? `கணக்கு வெற்றிகரமாக உருவாக்கப்பட்டது! வணக்கம் ${newAccount.name}`
-          : `Account registered successfully! Welcome, ${newAccount.name}`
+          ? `✅ கணக்கு வெற்றிகரமாக உருவாக்கப்பட்டது! வணக்கம் ${newAccount.name}`
+          : `✅ Account registered successfully! Welcome, ${newAccount.name}`
       );
 
       // Open directly into their calibrated role dashboard
