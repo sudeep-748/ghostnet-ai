@@ -23,6 +23,7 @@ type ScreenMode = 'SPLASH' | 'LOGIN_ROLE' | 'FISHERMAN' | 'RESCUE_CREW';
 type Language = 'EN' | 'TA';
 
 interface UserAccount {
+  id?: string;
   name: string;
   username: string;
   password: string;
@@ -1450,6 +1451,7 @@ export default function App() {
       vesselTag: currentUser.boatTag,
       reportedTime: 'Reported Just Now',
       latLong: `${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E • ${estimatedDepth}m depth • ${estimatedWeight} Tons`,
+      depthM: Number(estimatedDepth) || 20,
       stage: 1,
       stageTitle: 'Stage 1',
       stageColor: '#78350f',
@@ -1597,6 +1599,20 @@ export default function App() {
       showToast('✅ Offline map cached to device storage! Ready for deep sea.');
       setCrewTab('MISSION');
     }, 600);
+  };
+
+  const confirmMissionLaunch = async (offlineDownload: boolean) => {
+    setShowPreDepartureModal(false);
+    if (selectedTarget) {
+      if (offlineDownload) {
+        showToast(
+          language === 'TA'
+            ? 'ஆஃப்லைன் வரைபடம் மற்றும் சறுக்கல் திசை சேமிக்கப்பட்டது!'
+            : 'Offline sea tiles & drift corridor cached!'
+        );
+      }
+      await handleStartMission(selectedTarget);
+    }
   };
 
   const handleCompleteLedger = async () => {
@@ -1894,57 +1910,59 @@ export default function App() {
             </View>
           )}
 
-          {/* Role Selection Section */}
-          <View style={{ marginTop: 10, marginBottom: 12 }}>
-            <Text style={styles.sectionHeaderLabel}>{t('selectRoleHeader')}</Text>
-            <View style={styles.roleGrid}>
-              {/* Fisherman Card */}
-              <TouchableOpacity
-                style={[
-                  styles.roleCard,
-                  selectedRole === 'FISHERMAN' ? styles.roleCardSelected : styles.roleCardInactive
-                ]}
-                onPress={() => setSelectedRole('FISHERMAN')}
-              >
-                <View style={styles.roleCardTop}>
-                  <Text style={{ fontSize: 28 }}>🎣</Text>
-                  <View
-                    style={[
-                      styles.checkCircle,
-                      selectedRole === 'FISHERMAN' && styles.checkCircleActive
-                    ]}
-                  >
-                    {selectedRole === 'FISHERMAN' && <Text style={styles.checkText}>✓</Text>}
+          {/* Role Selection Section (Only for new account registration) */}
+          {authTab === 'REGISTER' && (
+            <View style={{ marginTop: 10, marginBottom: 12 }}>
+              <Text style={styles.sectionHeaderLabel}>{t('selectRoleHeader')}</Text>
+              <View style={styles.roleGrid}>
+                {/* Fisherman Card */}
+                <TouchableOpacity
+                  style={[
+                    styles.roleCard,
+                    selectedRole === 'FISHERMAN' ? styles.roleCardSelected : styles.roleCardInactive
+                  ]}
+                  onPress={() => setSelectedRole('FISHERMAN')}
+                >
+                  <View style={styles.roleCardTop}>
+                    <Text style={{ fontSize: 28 }}>🎣</Text>
+                    <View
+                      style={[
+                        styles.checkCircle,
+                        selectedRole === 'FISHERMAN' && styles.checkCircleActive
+                      ]}
+                    >
+                      {selectedRole === 'FISHERMAN' && <Text style={styles.checkText}>✓</Text>}
+                    </View>
                   </View>
-                </View>
-                <Text style={styles.roleTitle}>{t('fishermanTitle')}</Text>
-                <Text style={styles.roleDesc}>{t('fishermanDesc')}</Text>
-              </TouchableOpacity>
+                  <Text style={styles.roleTitle}>{t('fishermanTitle')}</Text>
+                  <Text style={styles.roleDesc}>{t('fishermanDesc')}</Text>
+                </TouchableOpacity>
 
-              {/* Rescue Crew Card */}
-              <TouchableOpacity
-                style={[
-                  styles.roleCard,
-                  selectedRole === 'RESCUE_CREW' ? styles.roleCardSelected : styles.roleCardInactive
-                ]}
-                onPress={() => setSelectedRole('RESCUE_CREW')}
-              >
-                <View style={styles.roleCardTop}>
-                  <Text style={{ fontSize: 28 }}>🤿</Text>
-                  <View
-                    style={[
-                      styles.checkCircle,
-                      selectedRole === 'RESCUE_CREW' && styles.checkCircleActive
-                    ]}
-                  >
-                    {selectedRole === 'RESCUE_CREW' && <Text style={styles.checkText}>✓</Text>}
+                {/* Rescue Crew Card */}
+                <TouchableOpacity
+                  style={[
+                    styles.roleCard,
+                    selectedRole === 'RESCUE_CREW' ? styles.roleCardSelected : styles.roleCardInactive
+                  ]}
+                  onPress={() => setSelectedRole('RESCUE_CREW')}
+                >
+                  <View style={styles.roleCardTop}>
+                    <Text style={{ fontSize: 28 }}>🤿</Text>
+                    <View
+                      style={[
+                        styles.checkCircle,
+                        selectedRole === 'RESCUE_CREW' && styles.checkCircleActive
+                      ]}
+                    >
+                      {selectedRole === 'RESCUE_CREW' && <Text style={styles.checkText}>✓</Text>}
+                    </View>
                   </View>
-                </View>
-                <Text style={styles.roleTitle}>{t('rescueTitle')}</Text>
-                <Text style={styles.roleDesc}>{t('rescueDesc')}</Text>
-              </TouchableOpacity>
+                  <Text style={styles.roleTitle}>{t('rescueTitle')}</Text>
+                  <Text style={styles.roleDesc}>{t('rescueDesc')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Primary Action Button */}
           <TouchableOpacity
@@ -2661,7 +2679,10 @@ export default function App() {
                   ) : (
                     <TouchableOpacity
                       style={styles.acceptMissionBtn}
-                      onPress={() => handleStartMission(tgt)}
+                      onPress={() => {
+                        setSelectedTarget(tgt);
+                        setShowPreDepartureModal(true);
+                      }}
                     >
                       <Text style={{ fontSize: 18 }}>⚡</Text>
                       <Text style={styles.acceptMissionText}>{t('acceptMissionBtn')}</Text>

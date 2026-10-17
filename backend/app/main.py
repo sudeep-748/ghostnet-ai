@@ -214,6 +214,32 @@ def seed_demo_data():
 
             db.commit()
             print(">>> GhostNet AI demo seed data successfully populated!")
+
+        # Guarantee sudeep (rescue) and hari (fisher) accounts exist on cloud DB
+        sudeep = db.query(User).filter((User.phone == "6382456789") | (User.name == "sudeep")).first()
+        if not sudeep:
+            sudeep_user = User(
+                id=str(uuid.uuid4()),
+                name="sudeep",
+                phone="6382456789",
+                hashed_password=get_password_hash("123456789"),
+                role="recovery_team",
+                boat_id="Poseidon Alpha (MM-01)"
+            )
+            db.add(sudeep_user)
+
+        hari = db.query(User).filter((User.phone == "6382833149") | (User.name == "hari")).first()
+        if not hari:
+            hari_user = User(
+                id=str(uuid.uuid4()),
+                name="hari",
+                phone="6382833149",
+                hashed_password=get_password_hash("123456789"),
+                role="fisher",
+                boat_id="IND-TN-02-MM-4410"
+            )
+            db.add(hari_user)
+        db.commit()
     except Exception as e:
         db.rollback()
         print(f">>> Seed data initialization error: {e}")
