@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -485,7 +485,15 @@ export default function App() {
   // Fisherman Dashboard State
   // -------------------------------------------------------------
   const [fisherTab, setFisherTab] = useState<'DECLARE' | 'TRACKER'>('DECLARE');
-  const [gpsCoords, setGpsCoords] = useState<string>('13.1250° N, 80.3150° E');
+  const [gpsCoords, setGpsCoords] = useState<string>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('ghostnet_last_real_gps');
+        if (saved) return saved;
+      }
+    } catch (e) {}
+    return '13.1250° N, 80.3150° E';
+  });
   const [selectedGear, setSelectedGear] = useState<'GILLNET' | 'TRAWL' | 'TRAP'>('GILLNET');
   const [selectedMaterial, setSelectedMaterial] = useState<'nylon' | 'polyethylene' | 'polypropylene' | 'mixed'>('nylon');
   const [estimatedDepth, setEstimatedDepth] = useState<number>(25);
@@ -582,6 +590,8 @@ export default function App() {
     timestamp: Date.now()
   });
 
+  const lastRescueUpdateRef = useRef<number>(0);
+
   useEffect(() => {
     let watchId: number | null = null;
     let prevPosition: { lat: number; lon: number; time: number } | null = null;
@@ -600,20 +610,34 @@ export default function App() {
           };
           setRescueCoords(initialFix);
           prevPosition = { lat: initialFix.lat, lon: initialFix.lon, time: initialFix.timestamp };
+          lastRescueUpdateRef.current = Date.now();
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              const formatted = `${initialFix.lat.toFixed(4)}° N, ${initialFix.lon.toFixed(4)}° E`;
+              window.localStorage.setItem('ghostnet_last_real_gps', formatted);
+            }
+          } catch (e) {}
         },
         (err) => console.log('Initial rescue GPS note:', err),
-        { enableHighAccuracy: true, timeout: 8000 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 300000 }
       );
 
-      // 2. Continuous real-time movement watch as the officer moves physically
+      // 2. Continuous real-time movement watch as the officer moves physically (4-second smooth intervals)
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
+          const now = Date.now();
+          // Throttle state updates to 4 seconds to keep HUD calm and readable
+          if (now - lastRescueUpdateRef.current < 4000) {
+            return;
+          }
+          lastRescueUpdateRef.current = now;
+
           let calculatedSpeedKn = 0.0;
           const rawSpeed = pos.coords.speed;
           if (rawSpeed !== null && rawSpeed !== undefined && rawSpeed > 0.2) {
             calculatedSpeedKn = parseFloat((rawSpeed * 1.94384).toFixed(1));
           } else if (prevPosition) {
-            const dtHours = Math.max(0.0001, (Date.now() - prevPosition.time) / 3600000);
+            const dtHours = Math.max(0.0001, (now - prevPosition.time) / 3600000);
             const distTraveledNm = calculateDistanceNm(prevPosition.lat, prevPosition.lon, pos.coords.latitude, pos.coords.longitude);
             const rawKnots = distTraveledNm / dtHours;
             // Filter stationary GPS jitter: only measure speed if displacement > 4 meters
@@ -624,7 +648,7 @@ export default function App() {
             lat: pos.coords.latitude,
             lon: pos.coords.longitude,
             speedKn: calculatedSpeedKn,
-            timestamp: Date.now()
+            timestamp: now
           };
           prevPosition = { lat: newPos.lat, lon: newPos.lon, time: newPos.timestamp };
           setRescueCoords(newPos);
@@ -643,7 +667,7 @@ export default function App() {
           } catch (e) {}
         },
         (err) => console.log('Continuous GPS watch notice:', err),
-        { enableHighAccuracy: true, maximumAge: 1000 }
+        { enableHighAccuracy: true, maximumAge: 4000 }
       );
     }
 
@@ -1401,35 +1425,91 @@ export default function App() {
 </html>`;
   };
 
-  // Live Device GPS / Satellite Fix Handler
+  // Stable Memoized Tactical Map HTML:
+  // Re-evaluates ONLY when a different target is selected (selectedTarget?.id),
+  // preventing the iframe from reloading on every live GPS tick and ELIMINATING map blinking/flashing!
+  const missionChartHtml = useMemo(() => {
+    if (!selectedTarget) return '';
+    const targetCoords = parseCoordinates(selectedTarget.coords);
+    const bLat = rescueCoords.lat;
+    const bLon = rescueCoords.lon;
+    const distNm = calculateDistanceNm(bLat, bLon, targetCoords.lat, targetCoords.lon);
+    return generateMarineChartHtml(
+      bLat,
+      bLon,
+      currentUser ? currentUser.boatTag : 'Poseidon Alpha (MM-01)',
+      targetCoords.lat,
+      targetCoords.lon,
+      selectedTarget.gearName,
+      selectedTarget.material || 'nylon',
+      selectedTarget.depthM || 25,
+      distNm
+    );
+  }, [selectedTarget?.id]);
+
+  // Live Device GPS / Satellite Fix Handler (Works completely offline via GNSS/NavIC hardware)
   const handleUpdateGps = () => {
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      showToast('📡 Acquiring live satellite fix...');
+      showToast(
+        language === 'TA'
+          ? '📡 ஜி.பி.எஸ் செயற்கைக்கோள் இணைப்பு தேடுகிறது (இணையம் தேவையில்லை)...'
+          : '📡 Connecting to GPS/NavIC satellites (No internet needed)...'
+      );
+
+      const applyPosition = (pos: GeolocationPosition) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        const formatted = `${lat.toFixed(4)}° N, ${lon.toFixed(4)}° E`;
+        setGpsCoords(formatted);
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem('ghostnet_last_real_gps', formatted);
+          }
+        } catch (e) {}
+        showToast(
+          language === 'TA'
+            ? `🛰️ செயற்கைக்கோள் உறுதி: ${formatted} (±${pos.coords.accuracy ? pos.coords.accuracy.toFixed(1) : '2.0'}மீ)`
+            : `🛰️ Live Satellite Fix: ${formatted} (±${pos.coords.accuracy ? pos.coords.accuracy.toFixed(1) : '2.0'}m)`
+        );
+      };
+
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lon = pos.coords.longitude;
-          const formatted = `${lat.toFixed(4)}° N, ${lon.toFixed(4)}° E`;
-          setGpsCoords(formatted);
-          showToast(`🛰️ Live GPS locked: ±${pos.coords.accuracy ? pos.coords.accuracy.toFixed(1) : '2.0'}m accuracy!`);
-        },
+        applyPosition,
         (err) => {
-          // If permission denied or on desktop, simulate realistic Kasimedu offshore water fix
-          const offshorePositions = [
-            '13.1258° N, 80.3164° E',
-            '13.1420° N, 80.3340° E',
-            '13.1685° N, 80.3520° E',
-            '13.1090° N, 80.3015° E'
-          ];
-          const randomPos = offshorePositions[Math.floor(Math.random() * offshorePositions.length)];
-          setGpsCoords(randomPos);
-          showToast('📍 Kasimedu Marine Pilot GPS locked (±1.8m RTK)!');
+          console.log('High-accuracy GNSS retry:', err);
+          // Fallback to cached hardware satellite fix
+          navigator.geolocation.getCurrentPosition(
+            applyPosition,
+            (fallbackErr) => {
+              console.log('Offline GPS note:', fallbackErr);
+              let savedReal: string | null = null;
+              try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                  savedReal = window.localStorage.getItem('ghostnet_last_real_gps');
+                }
+              } catch (e) {}
+              if (savedReal) {
+                setGpsCoords(savedReal);
+                showToast(
+                  language === 'TA'
+                    ? `🛰️ முந்தைய செயற்கைக்கோள் இருப்பிடம் மீட்டெடுக்கப்பட்டது: ${savedReal}`
+                    : `🛰️ Last recorded satellite fix restored: ${savedReal}`
+                );
+              } else {
+                showToast(
+                  language === 'TA'
+                    ? '⚠️ அலைபேசியின் Location/GPS ஆன் செய்யப்பட்டுள்ளதா என பார்க்கவும்.'
+                    : '⚠️ Please enable device Location/GPS to acquire satellite fix.'
+                );
+              }
+            },
+            { enableHighAccuracy: false, timeout: 20000, maximumAge: 600000 }
+          );
         },
-        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 300000 }
       );
     } else {
-      setGpsCoords('13.1258° N, 80.3164° E');
-      showToast('RTK GPS coordinates locked with ±1.8m accuracy!');
+      showToast('⚠️ Geolocation hardware not available on this browser.');
     }
   };
 
@@ -2754,17 +2834,6 @@ export default function App() {
                   const realHeading = calculateBearing(boatLat, boatLon, targetCoords.lat, targetCoords.lon);
                   const liveSpeed = rescueCoords.speedKn;
                   const etaMin = liveSpeed > 0.5 ? Math.round((distNm / liveSpeed) * 60) : Math.round((distNm / 12.4) * 60);
-                  const chartHtml = generateMarineChartHtml(
-                    boatLat,
-                    boatLon,
-                    currentUser.boatTag,
-                    targetCoords.lat,
-                    targetCoords.lon,
-                    selectedTarget.gearName,
-                    selectedTarget.material || 'nylon',
-                    selectedTarget.depthM,
-                    distNm
-                  );
 
                   return (
                     <View style={styles.radarCard}>
@@ -2834,7 +2903,7 @@ export default function App() {
                         }}
                       >
                         {React.createElement('iframe', {
-                          srcDoc: chartHtml,
+                          srcDoc: missionChartHtml,
                           style: {
                             width: '100%',
                             height: '100%',
