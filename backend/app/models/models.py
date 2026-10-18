@@ -102,6 +102,31 @@ class LostGearReport(Base):
         m = re.search(r'Threat:\s*([A-Za-z0-9_-]+)', self.notes)
         return m.group(1) if m else "HIGH"
 
+    @property
+    def reporter_name(self):
+        if self.reporter and self.reporter.name:
+            return self.reporter.name
+        if self.notes and "Reported by " in self.notes:
+            try:
+                return self.notes.split("Reported by ")[1].split(" (")[0].strip()
+            except Exception:
+                pass
+        return "Fisherman"
+
+    @property
+    def vessel_tag(self):
+        if self.notes and "(" in self.notes and ")" in self.notes:
+            try:
+                tag = self.notes.split("(")[1].split(")")[0].strip()
+                if "IND-TN" in tag or "TN-" in tag:
+                    return tag
+            except Exception:
+                pass
+        if self.reporter and self.reporter.boat_id:
+            return self.reporter.boat_id
+        return "IND-TN-07-SP-0007"
+
+
 
 class DriftPrediction(Base):
     __tablename__ = "drift_predictions"

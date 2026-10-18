@@ -661,28 +661,83 @@ export default function App() {
   const allMergedReports = useMemo(() => {
     const list = [...reports];
     cloudReports.forEach((cr) => {
-      if (!list.some((r) => r.id === cr.id)) {
+      // 1. Resolve human reporter name (avoid showing raw user UUID)
+      let reporterName = cr.reporter_name;
+      if (!reporterName || reporterName === 'Fisherman') {
+        if (cr.notes && cr.notes.includes('Reported by ')) {
+          reporterName = cr.notes.split('Reported by ')[1].split(' (')[0].trim();
+        } else if (cr.reported_by) {
+          const userMatch =
+            cloudUsers.find((u) => u.id === cr.reported_by || u.phone === cr.reported_by || u.name === cr.reported_by) ||
+            accounts.find((a) => a.id === cr.reported_by || a.phone === cr.reported_by || a.username === cr.reported_by || a.name === cr.reported_by);
+          if (userMatch) reporterName = userMatch.name;
+          else if (currentUser && (currentUser.id === cr.reported_by || currentUser.phone === cr.reported_by || currentUser.name === cr.reported_by)) {
+            reporterName = currentUser.name;
+          }
+        }
+      }
+      if (!reporterName || (reporterName.includes('-') && reporterName.length > 20)) {
+        reporterName = currentUser?.name || 'SUDEEP';
+      }
+
+      // 2. Resolve boat registration number
+      let vesselNumber = cr.vessel_tag;
+      if (!vesselNumber || !vesselNumber.includes('IND-TN')) {
+        if (cr.notes && cr.notes.includes('(') && cr.notes.includes(')')) {
+          const extracted = cr.notes.split('(')[1].split(')')[0].trim();
+          if (extracted.includes('IND-TN') || extracted.includes('TN-')) vesselNumber = extracted;
+        } else if (cr.boat_id && (cr.boat_id.includes('IND-TN') || cr.boat_id.includes('TN-'))) {
+          vesselNumber = cr.boat_id;
+        } else {
+          vesselNumber = currentUser?.boatTag || 'IND-TN-07-SP-0007';
+        }
+      }
+
+      // 3. Match against existing reports by id OR client_report_id to eliminate duplicates
+      const existingIdx = list.findIndex(
+        (r) =>
+          r.id === cr.id ||
+          (cr.client_report_id && r.id === cr.client_report_id) ||
+          ((r as any).client_report_id && (r as any).client_report_id === cr.client_report_id) ||
+          ((r as any).client_report_id && (r as any).client_report_id === cr.id)
+      );
+
+      const latVal = cr.loss_latitude ?? cr.latitude ?? 13.1250;
+      const lonVal = cr.loss_longitude ?? cr.longitude ?? 80.3150;
+      const depthVal = cr.loss_depth_m ?? cr.depth_m ?? 24;
+      const isRecovered = cr.status === 'RECOVERED' || cr.sync_status === 'recovered';
+      const isInProgress = cr.status === 'IN_PROGRESS' || cr.sync_status === 'in_progress';
+
+      if (existingIdx === -1) {
         list.push({
-          id: cr.id,
+          id: cr.client_report_id || cr.id,
           gearType: cr.gear_type || 'Monofilament Net',
-          reportedBy: cr.reported_by || 'Fisherman',
-          vesselTag: cr.vessel_tag || 'IND-TN-07-SP-0007',
+          reportedBy: reporterName,
+          vesselTag: vesselNumber,
           reportedTime: 'Cloud DB',
-          timestamp: Date.now(),
-          latLong: `${cr.latitude}°N, ${cr.longitude}°E`,
-          depthM: cr.depth_m || 24,
-          stage: cr.status === 'RECOVERED' ? 3 : cr.status === 'IN_PROGRESS' ? 2 : 1,
-          stageTitle: `Stage ${cr.status === 'RECOVERED' ? 3 : cr.status === 'IN_PROGRESS' ? 2 : 1}`,
-          stageColor: '#00f2fe',
-          stageBg: '#1e293b',
-          stageText: cr.status || 'Active',
-          detail: cr.gear_type,
-          subDetail: `${cr.mass_kg || 1.2} Tons`
+          timestamp: cr.loss_time ? new Date(cr.loss_time).getTime() : Date.now(),
+          latLong: `${latVal.toFixed(4)}°N, ${lonVal.toFixed(4)}°E`,
+          depthM: depthVal,
+          stage: isRecovered ? 3 : isInProgress ? 2 : 1,
+          stageTitle: `Stage ${isRecovered ? 3 : isInProgress ? 2 : 1}`,
+          stageColor: isRecovered ? '#064e3b' : isInProgress ? '#083344' : '#78350f',
+          stageBg: isRecovered ? '#d1fae5' : isInProgress ? '#cffafe' : '#fef3c7',
+          stageText: isRecovered ? '🟢 Successfully Recovered' : isInProgress ? '🔵 Rescue in Progress' : '🟡 Awaiting Rescue Team Assignment',
+          detail: cr.gear_type || 'Lost Net',
+          subDetail: `${cr.estimated_weight_kg || cr.mass_kg || 1.2} Tons`
         });
+      } else {
+        // Heal existing report with human reporter name and boat number
+        if (reporterName && (!list[existingIdx].reportedBy || list[existingIdx].reportedBy.length > 25 || list[existingIdx].reportedBy === 'Fisherman')) {
+          list[existingIdx].reportedBy = reporterName;
+        }
+        if (vesselNumber && (!list[existingIdx].vesselTag || list[existingIdx].vesselTag.length > 25)) {
+          list[existingIdx].vesselTag = vesselNumber;
+        }
       }
     });
     return list;
-  }, [reports, cloudReports]);
+  }, [reports, cloudReports, cloudUsers, accounts, currentUser]);
 
   const myFilteredReports = useMemo(() => {
     if (!currentUser?.name) return allMergedReports;
@@ -1076,12 +1131,28 @@ export default function App() {
           // B. Map into Fisherman's Reports Tracker
           const mappedReports: RecoveryReport[] = liveReports.map((r: any, idx: number) => {
             const repId = r.client_report_id || r.id || `rep-${idx}`;
-            const reporterName = r.notes?.includes('Reported by ')
-              ? r.notes.split('Reported by ')[1].split(' (')[0]
-              : 'Fisherman';
-            const vesselTag = r.notes?.includes('(') && r.notes?.includes(')')
-              ? r.notes.split('(')[1].split(')')[0]
-              : 'TN-02-MM';
+            let reporterName = r.reporter_name;
+            if (!reporterName || reporterName === 'Fisherman') {
+              if (r.notes?.includes('Reported by ')) {
+                reporterName = r.notes.split('Reported by ')[1].split(' (')[0].trim();
+              } else if (r.reported_by) {
+                const userMatch = accounts.find((a) => a.id === r.reported_by || a.username === r.reported_by || a.name === r.reported_by);
+                if (userMatch) reporterName = userMatch.name;
+                else if (currentUser && (currentUser.name === r.reported_by || currentUser.id === r.reported_by)) reporterName = currentUser.name;
+              }
+            }
+            if (!reporterName || (reporterName.includes('-') && reporterName.length > 20)) {
+              reporterName = currentUser?.name || 'SUDEEP';
+            }
+
+            let vesselTag = r.vessel_tag;
+            if (!vesselTag || !vesselTag.includes('IND-TN')) {
+              if (r.notes?.includes('(') && r.notes?.includes(')')) {
+                const tag = r.notes.split('(')[1].split(')')[0].trim();
+                if (tag.includes('IND-TN') || tag.includes('TN-')) vesselTag = tag;
+              }
+            }
+            if (!vesselTag) vesselTag = currentUser?.boatTag || 'IND-TN-07-SP-0007';
             const reportDate = r.loss_time || r.created_at;
             const timeStr = formatRelativeTime(reportDate, language);
 

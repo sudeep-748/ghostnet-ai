@@ -109,6 +109,8 @@ class LostGearReportResponse(BaseModel):
     loss_depth_m: Optional[int] = None
     estimated_weight_kg: Optional[float] = None
     threat_level: Optional[str] = None
+    reporter_name: Optional[str] = None
+    vessel_tag: Optional[str] = None
     created_at: datetime
 
     class Config:
