@@ -39,7 +39,9 @@ def create_mission(mission_in: RecoveryMissionCreate, db: Session = Depends(get_
     pred_id_val = mission_in.prediction_id
     if report_id_val:
         rep_match = db.query(LostGearReport).filter(
-            (LostGearReport.id == report_id_val) | (LostGearReport.client_report_id == report_id_val)
+            (LostGearReport.id == report_id_val) | 
+            (LostGearReport.client_report_id == report_id_val) |
+            (LostGearReport.client_report_id == str(report_id_val).replace("tgt-", "rep-"))
         ).first()
         if rep_match:
             report_id_val = rep_match.id
@@ -137,8 +139,13 @@ def add_recovery_update(mission_id: str, update_in: RecoveryUpdateCreate, db: Se
     if update.status == "net_recovered":
         mission.status = "completed"
         mission.completed_at = datetime.now(timezone.utc)
-        if mission.report_id:
-            parent_report = db.query(LostGearReport).filter(LostGearReport.id == mission.report_id).first()
+        rep_id_to_match = mission.report_id or update.report_id
+        if rep_id_to_match:
+            parent_report = db.query(LostGearReport).filter(
+                (LostGearReport.id == rep_id_to_match) |
+                (LostGearReport.client_report_id == rep_id_to_match) |
+                (LostGearReport.client_report_id == str(rep_id_to_match).replace("tgt-", "rep-"))
+            ).first()
             if parent_report:
                 parent_report.sync_status = "recovered"
 

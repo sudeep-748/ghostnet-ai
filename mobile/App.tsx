@@ -39,6 +39,7 @@ interface RecoveryReport {
   reportedBy: string;
   vesselTag: string;
   reportedTime: string;
+  timestamp?: number;
   latLong: string;
   depthM: number;
   stage: 1 | 2 | 3;
@@ -54,6 +55,7 @@ interface RescueTarget {
   id: string;
   priorityLabel: string;
   reportedAgo: string;
+  timestamp?: number;
   distanceNm: string;
   gearName: string;
   description: string;
@@ -377,6 +379,72 @@ const I18N = {
   }
 };
 
+// Intelligent Maritime Relative Time Formatter (Real time computation)
+const formatRelativeTime = (dateInput: any, lang: Language = 'EN'): string => {
+  if (!dateInput) return lang === 'TA' ? 'அண்மையில்' : 'Recently';
+
+  let dateObj: Date;
+  if (typeof dateInput === 'number') {
+    dateObj = new Date(dateInput);
+  } else if (typeof dateInput === 'string') {
+    const parsed = Date.parse(dateInput);
+    if (!isNaN(parsed)) {
+      dateObj = new Date(parsed);
+    } else {
+      // Return cleaned string fallback
+      return dateInput;
+    }
+  } else if (dateInput instanceof Date) {
+    dateObj = dateInput;
+  } else {
+    return lang === 'TA' ? 'அண்மையில்' : 'Recently';
+  }
+
+  const now = new Date();
+  const diffMs = now.getTime() - dateObj.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+
+  const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+  // 1. Just Now (< 2 mins)
+  if (diffMin < 2) {
+    return lang === 'TA' ? 'சற்றுமுன் அறிவிக்கப்பட்டது' : 'Reported Just Now';
+  }
+
+  // 2. Minutes ago (< 60 mins)
+  if (diffMin < 60) {
+    return lang === 'TA' ? `${diffMin} நிமிடங்களுக்கு முன்பு` : `${diffMin} min ago`;
+  }
+
+  // Check calendar day
+  const isToday = now.toDateString() === dateObj.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = yesterday.toDateString() === dateObj.toDateString();
+
+  // 3. Today earlier
+  if (isToday) {
+    return lang === 'TA' ? `இன்று, ${timeStr}` : `Today, ${timeStr}`;
+  }
+
+  // 4. Yesterday
+  if (isYesterday) {
+    return lang === 'TA' ? `நேற்று, ${timeStr}` : `Reported Yesterday, ${timeStr}`;
+  }
+
+  // 5. Days ago (2 to 6 days)
+  const diffDays = Math.floor(diffHr / 24);
+  if (diffDays >= 2 && diffDays <= 6) {
+    return lang === 'TA' ? `${diffDays} நாட்களுக்கு முன்பு` : `Reported ${diffDays} days ago`;
+  }
+
+  // 6. Older
+  const dateStr = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return lang === 'TA' ? `${dateStr} அன்று, ${timeStr}` : `Reported ${dateStr}, ${timeStr}`;
+};
+
 export default function App() {
   // Navigation & Screen State
   const [screen, setScreen] = useState<ScreenMode>('SPLASH');
@@ -470,14 +538,15 @@ export default function App() {
         reportedBy: 'Selvam Ramanathan',
         vesselTag: 'TN-02-MM-4410',
         reportedTime: 'Reported Today, 06:40 AM',
+        timestamp: Date.now() - 3600000 * 2,
         latLong: '13.125°N, 80.31°E • 25m depth',
         stage: 1,
         stageTitle: 'Stage 1',
         stageColor: '#78350f',
         stageBg: '#fef3c7',
         stageText: '🟡 Awaiting Rescue Team Assignment',
-        detail: 'Ping Interval: 45s',
-        subDetail: 'Auto-pinging transponder'
+        detail: 'Priority: High Attention',
+        subDetail: 'Awaiting Rescue Dispatch'
       },
       {
         id: 'rep-2',
@@ -485,6 +554,7 @@ export default function App() {
         reportedBy: 'Karthik S.',
         vesselTag: 'TN-04-F-8821',
         reportedTime: 'Reported Yesterday',
+        timestamp: Date.now() - 86400000,
         latLong: '13.084°N, 80.29°E • 42m depth',
         stage: 2,
         stageTitle: 'Stage 2',
@@ -492,7 +562,7 @@ export default function App() {
         stageBg: '#cffafe',
         stageText: '🔵 Rescue in Progress — Boat Delta En Route',
         detail: 'Vessel: Coastal Patrol 04',
-        subDetail: 'ETA: 22 Mins'
+        subDetail: 'Approaching coordinates'
       },
       {
         id: 'rep-3',
@@ -500,14 +570,15 @@ export default function App() {
         reportedBy: 'Selvam Ramanathan',
         vesselTag: 'TN-02-MM-4410',
         reportedTime: 'Reported 3 Days ago',
+        timestamp: Date.now() - 86400000 * 3,
         latLong: '13.190°N, 80.35°E • 18m depth',
         stage: 3,
         stageTitle: 'Stage 3',
         stageColor: '#064e3b',
         stageBg: '#d1fae5',
         stageText: '🟢 Successfully Recovered (1.5 Tons hauled)',
-        detail: 'Incentive Credited: ₹45,000',
-        subDetail: 'Closed Mission'
+        detail: 'Hauled & Verified: 1.5 Tons',
+        subDetail: 'Mission Closed • Circular Registry'
       }
     ];
   });
@@ -758,13 +829,13 @@ export default function App() {
     try {
       const [res, missionsRes] = await Promise.all([
         fetch(`${API_BASE}/api/v1/reports/lost-gear`),
-        fetch(`${API_BASE}/api/v1/missions?status_filter=active`).catch(() => null)
+        fetch(`${API_BASE}/api/v1/missions`).catch(() => null)
       ]);
 
-      let activeMissions: any[] = [];
+      let allMissions: any[] = [];
       if (missionsRes && missionsRes.ok) {
         try {
-          activeMissions = await missionsRes.json();
+          allMissions = await missionsRes.json();
         } catch (e) {}
       }
 
@@ -772,7 +843,13 @@ export default function App() {
         const liveReports = await res.json();
         if (Array.isArray(liveReports) && liveReports.length > 0) {
           // A. Map into Rescue Targets (only unrecovered/pending lost gear)
-          const unrecoveredReports = liveReports.filter((r: any) => r.sync_status !== 'recovered');
+          const unrecoveredReports = liveReports.filter((r: any) => {
+            const isCompleted = Array.isArray(allMissions) && allMissions.some(
+              (m: any) => (m.report_id === r.id || m.report_id === r.client_report_id) && m.status === 'completed'
+            );
+            return r.sync_status !== 'recovered' && !isCompleted;
+          });
+
           const mappedTargets: RescueTarget[] = unrecoveredReports.map((r: any, idx: number) => {
             const mat = r.material || (r.notes?.includes('Polymer: ') ? r.notes.split('Polymer: ')[1].split(' •')[0].toLowerCase() : 'nylon');
             const isFloating = mat === 'polyethylene' || mat === 'polypropylene';
@@ -792,8 +869,8 @@ export default function App() {
             if (!netMass) netMass = 1.2;
 
             // Check if another rescue team has already claimed/started this mission!
-            const activeM = Array.isArray(activeMissions)
-              ? activeMissions.find((m: any) => m.report_id === r.id || m.report_id === r.client_report_id)
+            const activeM = Array.isArray(allMissions)
+              ? allMissions.find((m: any) => (m.report_id === r.id || m.report_id === r.client_report_id) && m.status === 'active')
               : null;
             const isAssigned = !!activeM;
             const assignedTeam = activeM ? (activeM.team_name || activeM.team_id || 'Rescue Crew') : undefined;
@@ -810,27 +887,19 @@ export default function App() {
             const liveDistNm = calculateDistanceNm(rescueCoords.lat, rescueCoords.lon, rLat, rLon);
             const liveBearing = calculateBearing(rescueCoords.lat, rescueCoords.lon, rLat, rLon);
 
-            // Calculate human-friendly time elapsed
-            let timeAgo = 'Recent Report';
+            // Calculate human-friendly time elapsed using real timestamp
             const reportDate = r.loss_time || r.created_at;
-            if (reportDate) {
-              const elapsedMins = Math.max(0, Math.floor((Date.now() - new Date(reportDate).getTime()) / 60000));
-              if (elapsedMins < 2) timeAgo = 'Reported Just Now';
-              else if (elapsedMins < 60) timeAgo = `${elapsedMins} min ago`;
-              else {
-                const elapsedHours = Math.floor(elapsedMins / 60);
-                timeAgo = `${elapsedHours} hr ago`;
-              }
-            }
+            const timeAgo = formatRelativeTime(reportDate, language);
 
             return {
-              id: r.id || `tgt-${idx}`,
+              id: r.client_report_id || r.id || `tgt-${idx}`,
               priorityLabel: isAssigned
                 ? isMyMission
                   ? '🟢 YOUR ACTIVE MISSION'
                   : `🔵 IN PROGRESS (${assignedTeam})`
                 : `FCFS Priority #${idx + 1}`,
               reportedAgo: timeAgo,
+              timestamp: reportDate ? new Date(reportDate).getTime() : Date.now(),
               distanceNm: `${liveDistNm} NM away`,
               gearName: r.gear_type || 'Monofilament Gillnet',
               description: r.notes || 'Subsurface entanglement risk off Kasimedu',
@@ -858,17 +927,20 @@ export default function App() {
 
           // B. Map into Fisherman's Reports Tracker
           const mappedReports: RecoveryReport[] = liveReports.map((r: any, idx: number) => {
+            const repId = r.client_report_id || r.id || `rep-${idx}`;
             const reporterName = r.notes?.includes('Reported by ')
               ? r.notes.split('Reported by ')[1].split(' (')[0]
               : 'Fisherman';
             const vesselTag = r.notes?.includes('(') && r.notes?.includes(')')
               ? r.notes.split('(')[1].split(')')[0]
               : 'TN-02-MM';
-            const timeStr = r.loss_time
-              ? new Date(r.loss_time).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-              : 'Reported Recently';
+            const reportDate = r.loss_time || r.created_at;
+            const timeStr = formatRelativeTime(reportDate, language);
 
-            const isRecovered = r.sync_status === 'recovered';
+            const isCompletedMission = Array.isArray(allMissions)
+              ? allMissions.some((m: any) => (m.report_id === r.id || m.report_id === r.client_report_id) && m.status === 'completed')
+              : false;
+            const isRecovered = r.sync_status === 'recovered' || isCompletedMission;
 
             let repDepth = r.loss_depth_m;
             if (!repDepth && r.notes) {
@@ -885,11 +957,12 @@ export default function App() {
             const weightSuffix = repWeight ? ` • ${repWeight} Tons` : '';
 
             return {
-              id: r.client_report_id || r.id || `rep-${idx}`,
+              id: repId,
               gearType: r.gear_type || 'Monofilament Gillnet',
               reportedBy: reporterName,
               vesselTag: vesselTag,
               reportedTime: timeStr,
+              timestamp: reportDate ? new Date(reportDate).getTime() : Date.now(),
               latLong: `${(r.loss_latitude || 13.1250).toFixed(4)}°N, ${(r.loss_longitude || 80.3150).toFixed(4)}°E • ${repDepth}m depth${weightSuffix}`,
               depthM: repDepth,
               stage: isRecovered ? 3 : 1,
@@ -897,8 +970,8 @@ export default function App() {
               stageColor: isRecovered ? '#064e3b' : '#78350f',
               stageBg: isRecovered ? '#d1fae5' : '#fef3c7',
               stageText: isRecovered ? '🟢 Successfully Recovered & Hauled' : '🟡 Awaiting Rescue Team Assignment',
-              detail: isRecovered ? 'Mission Closed' : 'Ping Interval: 30s',
-              subDetail: isRecovered ? 'Logged to Circular Registry' : 'Auto-pinging transponder'
+              detail: isRecovered ? `Hauled & Verified: ${repWeight || 1.2} Tons` : 'Priority: High Attention',
+              subDetail: isRecovered ? 'Mission Closed • Circular Registry' : 'Awaiting Rescue Dispatch'
             };
           });
 
@@ -1612,12 +1685,17 @@ export default function App() {
 
     const { lat, lon } = parseCoordinates(gpsCoords);
     const reportId = `rep-${Date.now()}`;
+    const nowTime = Date.now();
+    const isoLossTime = new Date(nowTime).toISOString();
+    const formattedNow = formatRelativeTime(nowTime, language);
+
     const newRep: RecoveryReport = {
       id: reportId,
       gearType: gearTitle,
       reportedBy: currentUser.name,
       vesselTag: currentUser.boatTag,
-      reportedTime: 'Reported Just Now',
+      reportedTime: formattedNow,
+      timestamp: nowTime,
       latLong: `${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E • ${estimatedDepth}m depth • ${estimatedWeight} Tons`,
       depthM: Number(estimatedDepth) || 20,
       stage: 1,
@@ -1625,16 +1703,17 @@ export default function App() {
       stageColor: '#78350f',
       stageBg: '#fef3c7',
       stageText: '🟡 Awaiting Rescue Team Assignment',
-      detail: 'Ping Interval: 30s',
-      subDetail: 'Auto-pinging transponder'
+      detail: 'Priority: High Attention',
+      subDetail: 'Awaiting Rescue Dispatch'
     };
 
-    // Dynamically insert into Rescue Team pending targets list!
+    // Dynamically insert into Rescue Team pending targets list with MATCHING ID!
     const isFloating = selectedMaterial === 'polyethylene' || selectedMaterial === 'polypropylene';
     const newTarget: RescueTarget = {
-      id: `tgt-${Date.now()}`,
+      id: reportId,
       priorityLabel: `FCFS Priority #${targets.length + 1}`,
-      reportedAgo: 'Reported Just Now',
+      reportedAgo: formattedNow,
+      timestamp: nowTime,
       distanceNm: `${calculateDistanceNm(rescueCoords.lat, rescueCoords.lon, lat, lon)} NM away`,
       gearName: gearTitle,
       description: `Reported by ${currentUser.name} (${currentUser.boatTag}). ${selectedMaterial.toUpperCase()} material.`,
@@ -1654,6 +1733,7 @@ export default function App() {
       material: selectedMaterial,
       loss_latitude: lat,
       loss_longitude: lon,
+      loss_time: isoLossTime,
       loss_depth_m: estimatedDepth,
       estimated_weight_kg: estimatedWeight,
       threat_level: 'HIGH',
@@ -1737,24 +1817,28 @@ export default function App() {
       console.log('Offline mission initiation note:', e);
     }
 
-    // 2. Update matching report stage to Stage 2 (In Progress)
-    setReports((prev) =>
-      prev.map((rep) =>
-        rep.gearType.toLowerCase() === target.gearName.toLowerCase() ||
-        rep.reportedTime === 'Reported Just Now'
-          ? {
-              ...rep,
-              stage: 2,
-              stageTitle: 'Stage 2',
-              stageColor: '#083344',
-              stageBg: '#cffafe',
-              stageText: `🔵 Rescue in Progress — ${currentUser.name} En Route`,
-              detail: `Vessel: ${currentUser.boatTag}`,
-              subDetail: 'Approaching coordinates'
-            }
-          : rep
-      )
+    // 2. Update matching report stage to Stage 2 (In Progress) and persist
+    const updatedReports = reports.map((rep) =>
+      rep.id === target.id ||
+      rep.gearType.toLowerCase() === target.gearName.toLowerCase()
+        ? {
+            ...rep,
+            stage: 2 as const,
+            stageTitle: 'Stage 2',
+            stageColor: '#083344',
+            stageBg: '#cffafe',
+            stageText: `🔵 Rescue in Progress — ${currentUser.name} En Route`,
+            detail: `Vessel: ${currentUser.boatTag}`,
+            subDetail: 'Approaching coordinates'
+          }
+        : rep
     );
+    setReports(updatedReports);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('ghostnet_saved_reports', JSON.stringify(updatedReports));
+      }
+    } catch (e) {}
 
     showToast('📥 Downloading & caching sector map for deep-sea navigation...');
     try {
@@ -1836,30 +1920,31 @@ export default function App() {
         }
       }
 
-      // 2. Update local report to Stage 3 (Recovered)
-      setReports((prev) =>
-        prev.map((rep) =>
-          rep.gearType.toLowerCase() === selectedTarget.gearName.toLowerCase() ||
-          rep.stage === 2
-            ? {
-                ...rep,
-                stage: 3,
-                stageTitle: 'Stage 3',
-                stageColor: '#064e3b',
-                stageBg: '#d1fae5',
-                stageText: `🟢 Successfully Recovered (${verifiedWeight} Tons hauled)`,
-                detail: `Verified by: ${currentUser.name}`,
-                subDetail: 'Mission Closed'
-              }
-            : rep
-        )
+      // 2. Update local report to Stage 3 (Recovered) and persist to localStorage!
+      const updatedReports = reports.map((rep) =>
+        rep.id === selectedTarget.id ||
+        rep.gearType.toLowerCase() === selectedTarget.gearName.toLowerCase() ||
+        rep.stage === 2
+          ? {
+              ...rep,
+              stage: 3 as const,
+              stageTitle: 'Stage 3',
+              stageColor: '#064e3b',
+              stageBg: '#d1fae5',
+              stageText: `🟢 Successfully Recovered (${verifiedWeight} Tons hauled)`,
+              detail: `Hauled & Verified: ${verifiedWeight} Tons`,
+              subDetail: 'Mission Closed • Circular Registry'
+            }
+          : rep
       );
+      setReports(updatedReports);
 
       // 3. Remove completed target from pending queue permanently
       const remainingTargets = targets.filter((t) => t.id !== selectedTarget.id);
       setTargets(remainingTargets);
       try {
         if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem('ghostnet_saved_reports', JSON.stringify(updatedReports));
           window.localStorage.setItem('ghostnet_pending_targets', JSON.stringify(remainingTargets));
           window.localStorage.removeItem('ghostnet_active_mission_id');
           window.localStorage.removeItem('ghostnet_selected_target');
@@ -2549,13 +2634,7 @@ export default function App() {
                             : 'கூண்டு / பொறி (Trap)'
                           : item.gearType}{' '}
                         •{' '}
-                        {language === 'TA'
-                          ? item.reportedTime.includes('Just Now')
-                            ? 'சற்றுமுன் அறிவிக்கப்பட்டது'
-                            : item.reportedTime.includes('Days ago')
-                            ? item.reportedTime.replace('Reported', 'அறிவிக்கப்பட்டது').replace('Days ago', 'நாட்களுக்கு முன்பு')
-                            : 'அண்மையில் அறிவிக்கப்பட்டது'
-                          : item.reportedTime}
+                        {formatRelativeTime(item.timestamp || item.reportedTime, language)}
                       </Text>
                       <Text style={styles.trackerCoordsText}>📍 {item.latLong}</Text>
                       <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
@@ -2584,22 +2663,20 @@ export default function App() {
                   <View style={styles.trackerFooterRow}>
                     <Text style={styles.trackerMetaLeft}>
                       {language === 'TA'
-                        ? item.detail.includes('Ping Interval')
-                          ? 'சிக்னல் இடைவெளி: 30 விநாடிகள்'
-                          : item.detail.includes('Incentive')
-                          ? item.detail.replace('Incentive Credited', 'ஊக்கத்தொகை வரவு வைக்கப்பட்டது')
-                          : item.detail.replace('Vessel:', 'மீட்பு படகு:')
+                        ? item.stage === 1
+                          ? 'அவசர கவனம்'
+                          : item.stage === 2
+                          ? item.detail.replace('Vessel:', 'மீட்பு படகு:')
+                          : item.detail.replace('Hauled & Verified:', 'எடை சரிபார்க்கப்பட்டது:').replace('Tons', 'டன்கள்')
                         : item.detail}
                     </Text>
                     <Text style={styles.trackerMetaRight}>
                       {language === 'TA'
-                        ? item.subDetail.includes('Auto-pinging')
-                          ? 'தானியங்கி சிக்னல் அனுப்புகிறது'
-                          : item.subDetail.includes('ETA')
-                          ? item.subDetail.replace('ETA:', 'வருகை நேரம்:').replace('Mins', 'நிமிடங்கள்')
-                          : item.subDetail.includes('Closed')
-                          ? 'பணி நிறைவுற்றது'
-                          : item.subDetail
+                        ? item.stage === 1
+                          ? 'மீட்புக் குழு காத்திருப்பு'
+                          : item.stage === 2
+                          ? item.subDetail.replace('Approaching coordinates', 'இலக்கை நெருங்குகிறது')
+                          : 'பணி நிறைவுற்றது • சுழற்சி பதிவு'
                         : item.subDetail}
                     </Text>
                   </View>
@@ -2686,7 +2763,9 @@ export default function App() {
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                 <Text style={styles.criticalBadgeText}>{t('criticalNetAlertBadge')}</Text>
-                <Text style={styles.criticalTimeText}>{targets[0].reportedAgo}</Text>
+                <Text style={styles.criticalTimeText}>
+                  {formatRelativeTime(targets[0].timestamp || targets[0].reportedAgo, language)}
+                </Text>
               </View>
               <Text style={styles.criticalTitleText}>
                 {targets[0].gearName} off {targets[0].sector} ({targets[0].coords})
@@ -2770,7 +2849,7 @@ export default function App() {
                       <View style={styles.targetPriorityBadge}>
                         <View style={[styles.targetPriorityDot, { backgroundColor: tgt.accentColor }]} />
                         <Text style={[styles.targetPriorityTxt, { color: tgt.accentColor }]}>
-                          {tgt.priorityLabel} • {tgt.reportedAgo}
+                          {tgt.priorityLabel} • {formatRelativeTime(tgt.timestamp || tgt.reportedAgo, language)}
                         </Text>
                       </View>
                       <Text style={styles.targetDistanceTxt}>{tgt.distanceNm}</Text>
@@ -2936,21 +3015,32 @@ export default function App() {
             ) : (
               <>
                 {/* Active Mission Target Strip */}
-                <View style={styles.engagedMissionCard}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View style={styles.engagedBadge}>
-                      <View style={styles.redPulsingDot} />
-                      <Text style={styles.engagedBadgeText}>{t('engagedRescueBadge')}</Text>
+                {(() => {
+                  const targetCoords = parseCoordinates(selectedTarget.coords);
+                  const distNm = calculateDistanceNm(rescueCoords.lat, rescueCoords.lon, targetCoords.lat, targetCoords.lon);
+                  const liveSpeed = rescueCoords.speedKn;
+                  const activeEtaMin = liveSpeed > 0.5 ? Math.max(1, Math.round((distNm / liveSpeed) * 60)) : Math.max(1, Math.round((distNm / 12.4) * 60));
+
+                  return (
+                    <View style={styles.engagedMissionCard}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={styles.engagedBadge}>
+                          <View style={styles.redPulsingDot} />
+                          <Text style={styles.engagedBadgeText}>{t('engagedRescueBadge')}</Text>
+                        </View>
+                        <Text style={styles.etaText}>
+                          {t('etaPrefix')} {activeEtaMin} MIN
+                        </Text>
+                      </View>
+                      <Text style={styles.engagedTargetTitle}>
+                        {selectedTarget.gearName} • {selectedTarget.massKg} kg • Intercepted by {currentUser.name}
+                      </Text>
+                      <Text style={styles.engagedTargetSub}>
+                        🛡️ Target: {selectedTarget.coords} • Subsurface depth {selectedTarget.depthM}m
+                      </Text>
                     </View>
-                    <Text style={styles.etaText}>{t('etaPrefix')} 11 MIN</Text>
-                  </View>
-                  <Text style={styles.engagedTargetTitle}>
-                    {selectedTarget.gearName} • {selectedTarget.massKg} kg • Intercepted by {currentUser.name}
-                  </Text>
-                  <Text style={styles.engagedTargetSub}>
-                    🛡️ Target: {selectedTarget.coords} • Subsurface depth {selectedTarget.depthM}m
-                  </Text>
-                </View>
+                  );
+                })()}
 
                 {/* OFFSHORE NAUTICAL SATELLITE MAP & MEMBER 1 AI DRIFT TRAJECTORY */}
                 {(() => {
