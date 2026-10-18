@@ -493,12 +493,12 @@ export default function App() {
 
   // Current Logged-in User Session
   const [currentUser, setCurrentUser] = useState<UserAccount>({
-    name: 'Selvam Ramanathan',
-    username: 'selvam_04',
+    name: 'HARI DOSS',
+    username: 'haridoss',
     password: 'password123',
     role: 'FISHERMAN',
-    boatTag: 'TN-02-MM-4410',
-    phone: '+91 98401 23456',
+    boatTag: 'IND-TN-02-MM-4491',
+    phone: '+91 63828 33149',
     port: 'Kasimedu Harbour Port'
   });
 
@@ -1118,15 +1118,13 @@ export default function App() {
                   savedUser.port = 'Chennai Coastal Patrol Station';
                   window.localStorage.setItem('ghostnet_session_user', JSON.stringify(savedUser));
                 }
-                // Ensure hari is always recognized as Fisherman on IND-TN-02-MM-4410
+                // Ensure hari is always recognized with their registered boatTag IND-TN-02-MM-4491
                 if (
-                  savedUser.name?.toLowerCase() === 'hari' ||
-                  savedUser.username?.toLowerCase() === 'hari' ||
+                  savedUser.name?.toLowerCase().includes('hari') ||
+                  savedUser.username?.toLowerCase().includes('hari') ||
                   savedUser.phone === '6382833149'
                 ) {
-                  savedUser.role = 'FISHERMAN';
-                  savedUser.boatTag = 'IND-TN-02-MM-4410';
-                  savedUser.port = 'Kasimedu Coastal Harbour';
+                  savedUser.boatTag = 'IND-TN-02-MM-4491';
                   window.localStorage.setItem('ghostnet_session_user', JSON.stringify(savedUser));
                 }
                 setCurrentUser(savedUser);
@@ -1191,7 +1189,7 @@ export default function App() {
               username: qUser,
               password: qPass,
               role: isRescue ? 'RESCUE_CREW' : 'FISHERMAN',
-              boatTag: data.user.boat_id || (isRescue ? 'Poseidon Alpha (MM-01)' : 'IND-TN-02-MM-4410'),
+              boatTag: data.user.boat_id || (data.user.name?.toLowerCase().includes('hari') ? 'IND-TN-02-MM-4491' : (isRescue ? 'Poseidon Alpha (MM-01)' : 'IND-TN-02-MM-4491')),
               phone: data.user.phone || qUser,
               port: isRescue ? 'Chennai Coastal Patrol Station' : 'Kasimedu Coastal Harbour'
             };
