@@ -1229,18 +1229,16 @@ export default function App() {
             if (savedStr) {
               const savedUser: UserAccount = JSON.parse(savedStr);
               if (savedUser && savedUser.role) {
-                // Ensure sudeep is always recognized as Rescue Team on patrol vessel
+                // Auto-heal any session where Sudeep or Hari had legacy overrides
                 if (
-                  savedUser.name?.toLowerCase() === 'sudeep' ||
-                  savedUser.username?.toLowerCase() === 'sudeep' ||
-                  savedUser.phone === '6382456789'
+                  savedUser.name?.toLowerCase().includes('sudeep') ||
+                  savedUser.username?.toLowerCase().includes('sudeep')
                 ) {
-                  savedUser.role = 'RESCUE_CREW';
-                  savedUser.boatTag = 'Poseidon Alpha (MM-01)';
-                  savedUser.port = 'Chennai Coastal Patrol Station';
+                  savedUser.role = 'FISHERMAN';
+                  savedUser.boatTag = 'IND-TN-07-SP-0007';
+                  savedUser.port = 'Kasimedu Coastal Harbour';
                   window.localStorage.setItem('ghostnet_session_user', JSON.stringify(savedUser));
                 }
-                // Ensure hari is always recognized with their registered boatTag IND-TN-07-SP-0007
                 if (
                   savedUser.name?.toLowerCase().includes('hari') ||
                   savedUser.username?.toLowerCase().includes('hari') ||
