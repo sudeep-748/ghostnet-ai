@@ -492,15 +492,26 @@ export default function App() {
     return [];
   });
 
-  // Current Logged-in User Session
-  const [currentUser, setCurrentUser] = useState<UserAccount>({
-    name: 'HARI DOSS',
-    username: 'haridoss',
-    password: 'password123',
-    role: 'FISHERMAN',
-    boatTag: 'IND-TN-07-SP-0007',
-    phone: '+91 63828 33149',
-    port: 'Kasimedu Harbour Port'
+  // Current Logged-in User Session (loaded from persistent storage or clean default)
+  const [currentUser, setCurrentUser] = useState<UserAccount>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('ghostnet_session_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.role) return parsed;
+        }
+      }
+    } catch (e) {}
+    return {
+      name: '',
+      username: '',
+      password: '',
+      role: 'FISHERMAN',
+      boatTag: 'IND-TN-07-SP-0007',
+      phone: '',
+      port: 'Kasimedu Coastal Harbour'
+    };
   });
 
   // Form Fields State
@@ -677,7 +688,7 @@ export default function App() {
         }
       }
       if (!reporterName || (reporterName.includes('-') && reporterName.length > 20)) {
-        reporterName = currentUser?.name || 'SUDEEP';
+        reporterName = currentUser?.name || 'Registered Fisherman';
       }
 
       // 2. Resolve boat registration number
@@ -1142,7 +1153,7 @@ export default function App() {
               }
             }
             if (!reporterName || (reporterName.includes('-') && reporterName.length > 20)) {
-              reporterName = currentUser?.name || 'SUDEEP';
+              reporterName = currentUser?.name || 'Registered Fisherman';
             }
 
             let vesselTag = r.vessel_tag;
@@ -1229,26 +1240,6 @@ export default function App() {
             if (savedStr) {
               const savedUser: UserAccount = JSON.parse(savedStr);
               if (savedUser && savedUser.role) {
-                // Auto-heal any session where Sudeep or Hari had legacy overrides
-                if (
-                  savedUser.name?.toLowerCase().includes('sudeep') ||
-                  savedUser.username?.toLowerCase().includes('sudeep')
-                ) {
-                  savedUser.role = 'FISHERMAN';
-                  savedUser.boatTag = 'IND-TN-07-SP-0007';
-                  savedUser.port = 'Kasimedu Coastal Harbour';
-                  window.localStorage.setItem('ghostnet_session_user', JSON.stringify(savedUser));
-                }
-                if (
-                  savedUser.name?.toLowerCase().includes('hari') ||
-                  savedUser.username?.toLowerCase().includes('hari') ||
-                  savedUser.phone === '6382833149'
-                ) {
-                  if (!savedUser.boatTag || savedUser.boatTag.includes('4410') || savedUser.boatTag.includes('4491')) {
-                    savedUser.boatTag = 'IND-TN-07-SP-0007';
-                  }
-                  window.localStorage.setItem('ghostnet_session_user', JSON.stringify(savedUser));
-                }
                 setCurrentUser(savedUser);
                 if (savedUser.role === 'FISHERMAN') {
                   setScreen('FISHERMAN');
@@ -1311,7 +1302,7 @@ export default function App() {
               username: qUser,
               password: qPass,
               role: isRescue ? 'RESCUE_CREW' : 'FISHERMAN',
-              boatTag: data.user.boat_id || (data.user.name?.toLowerCase().includes('hari') ? 'IND-TN-07-SP-0007' : (isRescue ? 'Poseidon Alpha (MM-01)' : 'IND-TN-07-SP-0007')),
+              boatTag: data.user.boat_id || (isRescue ? 'Poseidon Alpha (MM-01)' : 'IND-TN-07-SP-0007'),
               phone: data.user.phone || qUser,
               port: isRescue ? 'Chennai Coastal Patrol Station' : 'Kasimedu Coastal Harbour'
             };
