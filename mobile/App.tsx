@@ -2192,22 +2192,22 @@ export default function App() {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Top Header Bar with Dynamic User Name */}
           <View style={styles.topHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, marginRight: 8 }}>
               <View style={styles.headerLogoThumb}>
                 <Image source={LOGO_IMG} style={{ width: '100%', height: '100%', borderRadius: 8 }} />
               </View>
-              <View>
-                <Text style={styles.headerWelcomeText}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.headerWelcomeText} numberOfLines={1} ellipsizeMode="tail">
                   {language === 'TA'
                     ? `வணக்கம், ${currentUser.name}`
                     : `Welcome, ${currentUser.name}`}
                 </Text>
-                <Text style={styles.headerSubtitleText}>
+                <Text style={styles.headerSubtitleText} numberOfLines={1} ellipsizeMode="tail">
                   {currentUser.boatTag} • {language === 'TA' ? 'காசிமேடு துறைமுகம்' : currentUser.port}
                 </Text>
               </View>
             </View>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
               <TouchableOpacity style={styles.langBadge} onPress={toggleLanguage}>
                 <Text style={styles.langBadgeText}>
                   {language === 'EN' ? 'தமிழ்' : 'EN'}
@@ -2221,7 +2221,7 @@ export default function App() {
                   showToast('Logged out successfully.');
                 }}
               >
-                <Text style={{ fontSize: 12, color: '#f87171' }}>{t('logout')}</Text>
+                <Text style={{ fontSize: 12, color: '#f87171', fontWeight: '700' }}>{t('logout')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2638,18 +2638,18 @@ export default function App() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Top Header */}
         <View style={styles.topHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, marginRight: 8 }}>
             <View style={styles.headerLogoThumb}>
               <Image source={LOGO_IMG} style={{ width: '100%', height: '100%', borderRadius: 8 }} />
             </View>
-            <View>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.hudSubHeader}>{t('tacticalHudTitle')}</Text>
-              <Text style={styles.headerWelcomeText}>
+              <Text style={styles.headerWelcomeText} numberOfLines={1} ellipsizeMode="tail">
                 {language === 'TA' ? `வணக்கம், ${currentUser.name}` : `Welcome, ${currentUser.name}`}
               </Text>
             </View>
           </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             <TouchableOpacity style={styles.langBadge} onPress={toggleLanguage}>
               <Text style={styles.langBadgeText}>
                 {language === 'EN' ? 'தமிழ்' : 'EN'}
@@ -2663,7 +2663,7 @@ export default function App() {
                 showToast('Logged out successfully.');
               }}
             >
-              <Text style={{ fontSize: 12, color: '#f87171' }}>{t('logout')}</Text>
+              <Text style={{ fontSize: 12, color: '#f87171', fontWeight: '700' }}>{t('logout')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -3280,14 +3280,24 @@ const styles = StyleSheet.create({
   primaryActionText: { color: '#030b14', fontSize: 16, fontWeight: '800' },
   langPillCenter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 18, paddingVertical: 8 },
   langPillText: { color: '#00f2fe', fontSize: 13, fontWeight: '600' },
-  topHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, marginBottom: 8 },
-  headerLogoThumb: { width: 42, height: 42, borderRadius: 10, backgroundColor: '#060f18', overflow: 'hidden', padding: 2 },
-  headerWelcomeText: { color: '#ffffff', fontSize: 17, fontWeight: '700' },
-  headerSubtitleText: { color: '#94a3b8', fontSize: 12 },
+  topHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, marginBottom: 8, width: '100%' },
+  headerLogoThumb: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#060f18', overflow: 'hidden', padding: 2, flexShrink: 0 },
+  headerWelcomeText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+  headerSubtitleText: { color: '#94a3b8', fontSize: 11 },
   hudSubHeader: { color: '#00f2fe', fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
-  langBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: 'rgba(255, 255, 255, 0.1)', alignItems: 'center', justifyContent: 'center' },
-  langBadgeText: { color: '#ffffff', fontSize: 12, fontWeight: '600' },
-  switchRoleBadge: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 16, backgroundColor: '#212b35', alignItems: 'center', justifyContent: 'center' },
+  langBadge: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 14, backgroundColor: 'rgba(255, 255, 255, 0.1)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  langBadgeText: { color: '#ffffff', fontSize: 11, fontWeight: '600' },
+  switchRoleBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
   protocolCard: { backgroundColor: '#212b35', borderRadius: 12, padding: 12, marginBottom: 12 },
   protocolHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   protocolTitle: { color: '#6ff6ff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
