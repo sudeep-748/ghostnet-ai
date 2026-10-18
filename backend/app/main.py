@@ -47,25 +47,15 @@ app.include_router(analytics_router, prefix=settings.API_V1_STR)
 app.include_router(uploads_router, prefix=settings.API_V1_STR)
 
 @app.on_event("startup")
-def seed_demo_data():
-    """Wipes all data on startup to guarantee a completely clean database for new users."""
-    db = SessionLocal()
+def on_startup():
+    """Startup initialization: ensures database tables exist without wiping data.
+    Data is ONLY cleared when user explicitly triggers POST /api/v1/auth/reset-database."""
     try:
-        db.query(RecyclerAssignment).delete()
-        db.query(RecoveryUpdate).delete()
-        db.query(RecoveryMission).delete()
-        db.query(DriftPrediction).delete()
-        db.query(LostGearReport).delete()
-        db.query(Gear).delete()
-        db.query(Boat).delete()
-        db.query(User).delete()
-        db.commit()
-        print(">>> GhostNet AI database wiped completely clean on startup!")
+        from app.core.database import Base, engine
+        Base.metadata.create_all(bind=engine)
+        print(">>> GhostNet AI backend started successfully! Persistent database active.")
     except Exception as e:
-        db.rollback()
-        print(f">>> Database wipe error: {e}")
-    finally:
-        db.close()
+        print(f">>> Database startup notice: {e}")
 
 @app.post("/api/v1/auth/reset-database")
 def reset_database():

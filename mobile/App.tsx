@@ -9,7 +9,8 @@ import {
   Modal,
   Image,
   SafeAreaView,
-  Alert
+  Alert,
+  Linking
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
@@ -96,7 +97,7 @@ const I18N = {
     usernameLabel: 'CHOOSE USERNAME',
     usernamePlaceholder: 'e.g. selvam_04',
     boatTagLabel: 'VESSEL / BOAT REGISTRATION NUMBER',
-    boatTagPlaceholder: 'e.g. IND-TN-02-MM-4410',
+    boatTagPlaceholder: 'e.g. IND-TN-07-SP-0007',
     regPhoneLabel: 'MOBILE PHONE (FOR RECOVERY SMS & OTP)',
     regPhonePlaceholder: '+91 98401 23456',
     createPassLabel: 'CREATE PASSCODE',
@@ -246,7 +247,7 @@ const I18N = {
     usernameLabel: 'பயனர்பெயர்',
     usernamePlaceholder: 'எ.கா. selvam_04',
     boatTagLabel: 'படகு பதிவு எண்',
-    boatTagPlaceholder: 'எ.கா. IND-TN-02-MM-4410',
+    boatTagPlaceholder: 'எ.கா. IND-TN-07-SP-0007',
     regPhoneLabel: 'அலைபேசி எண் (SMS மற்றும் மீட்பு தகவல்)',
     regPhonePlaceholder: '+91 98401 23456',
     createPassLabel: 'புதிய கடவுச்சொல்',
@@ -497,7 +498,7 @@ export default function App() {
     username: 'haridoss',
     password: 'password123',
     role: 'FISHERMAN',
-    boatTag: 'IND-TN-02-MM-4491',
+    boatTag: 'IND-TN-07-SP-0007',
     phone: '+91 63828 33149',
     port: 'Kasimedu Harbour Port'
   });
@@ -576,7 +577,7 @@ export default function App() {
         id: 'rep-1',
         gearType: 'Monofilament Gillnet',
         reportedBy: 'Selvam Ramanathan',
-        vesselTag: 'TN-02-MM-4410',
+        vesselTag: 'IND-TN-07-SP-0007',
         reportedTime: 'Reported Today, 06:40 AM',
         timestamp: Date.now() - 3600000 * 2,
         latLong: '13.125°N, 80.31°E • 25m depth',
@@ -608,7 +609,7 @@ export default function App() {
         id: 'rep-3',
         gearType: 'Gillnet',
         reportedBy: 'Selvam Ramanathan',
-        vesselTag: 'TN-02-MM-4410',
+        vesselTag: 'IND-TN-07-SP-0007',
         reportedTime: 'Reported 3 Days ago',
         timestamp: Date.now() - 86400000 * 3,
         latLong: '13.190°N, 80.35°E • 18m depth',
@@ -649,6 +650,88 @@ export default function App() {
   const [verifiedWeight, setVerifiedWeight] = useState<number>(1.2);
   const [isNavigating, setIsNavigating] = useState<boolean>(false);
   const [navProgress, setNavProgress] = useState<number>(0);
+
+  // Database Inspector State
+  const [showDbModal, setShowDbModal] = useState<boolean>(false);
+  const [cloudUsers, setCloudUsers] = useState<any[]>([]);
+  const [cloudReports, setCloudReports] = useState<any[]>([]);
+  const [loadingDb, setLoadingDb] = useState<boolean>(false);
+
+  const fetchDbData = async () => {
+    setLoadingDb(true);
+    try {
+      const [usersRes, reportsRes] = await Promise.allSettled([
+        fetch(`${API_BASE}/api/v1/auth/users`),
+        fetch(`${API_BASE}/api/v1/reports/lost-gear`)
+      ]);
+      if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
+        const uData = await usersRes.value.json();
+        setCloudUsers(Array.isArray(uData) ? uData : []);
+      }
+      if (reportsRes.status === 'fulfilled' && reportsRes.value.ok) {
+        const rData = await reportsRes.value.json();
+        setCloudReports(Array.isArray(rData) ? rData : []);
+      }
+    } catch (e) {
+      console.log('Error inspecting database:', e);
+    } finally {
+      setLoadingDb(false);
+    }
+  };
+
+  const allMergedUsers = useMemo(() => {
+    const map = new Map<string, any>();
+    accounts.forEach((acc) => {
+      const key = (acc.phone || acc.username || '').trim().toLowerCase();
+      if (key) {
+        map.set(key, { ...acc, isCloud: false });
+      }
+    });
+    cloudUsers.forEach((u) => {
+      const key = (u.phone || u.name || '').trim().toLowerCase();
+      if (key) {
+        const existing = map.get(key);
+        map.set(key, {
+          ...existing,
+          ...u,
+          name: u.name || existing?.name,
+          username: existing?.username || u.name,
+          phone: u.phone || existing?.phone,
+          role: u.role === 'fisher' || u.role === 'FISHERMAN' ? 'FISHERMAN' : 'RESCUE_CREW',
+          boatTag: u.boat_id || existing?.boatTag || 'IND-TN-07-SP-0007',
+          isCloud: true
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [accounts, cloudUsers]);
+
+  const allMergedReports = useMemo(() => {
+    const list = [...reports];
+    cloudReports.forEach((cr) => {
+      if (!list.some((r) => r.id === cr.id)) {
+        list.push({
+          id: cr.id,
+          gearType: cr.gear_type || 'Monofilament Net',
+          reportedBy: cr.reported_by || 'Fisherman',
+          vesselTag: cr.vessel_tag || 'IND-TN-07-SP-0007',
+          reportedTime: 'Cloud DB',
+          timestamp: Date.now(),
+          latLong: `${cr.latitude}°N, ${cr.longitude}°E`,
+          depthM: cr.depth_m || 24,
+          stage: cr.status === 'RECOVERED' ? 3 : cr.status === 'IN_PROGRESS' ? 2 : 1,
+          stageTitle: `Stage ${cr.status === 'RECOVERED' ? 3 : cr.status === 'IN_PROGRESS' ? 2 : 1}`,
+          stageColor: '#00f2fe',
+          stageBg: '#1e293b',
+          stageText: cr.status || 'Active',
+          detail: cr.gear_type,
+          subDetail: `${cr.mass_kg || 1.2} Tons`
+        });
+      }
+    });
+    return list;
+  }, [reports, cloudReports]);
+
 
   // Live Real-Time GPS Tracking of Rescue Officer / Boat (moves as the user moves)
   const [rescueCoords, setRescueCoords] = useState<{
@@ -1118,13 +1201,15 @@ export default function App() {
                   savedUser.port = 'Chennai Coastal Patrol Station';
                   window.localStorage.setItem('ghostnet_session_user', JSON.stringify(savedUser));
                 }
-                // Ensure hari is always recognized with their registered boatTag IND-TN-02-MM-4491
+                // Ensure hari is always recognized with their registered boatTag IND-TN-07-SP-0007
                 if (
                   savedUser.name?.toLowerCase().includes('hari') ||
                   savedUser.username?.toLowerCase().includes('hari') ||
                   savedUser.phone === '6382833149'
                 ) {
-                  savedUser.boatTag = 'IND-TN-02-MM-4491';
+                  if (!savedUser.boatTag || savedUser.boatTag.includes('4410') || savedUser.boatTag.includes('4491')) {
+                    savedUser.boatTag = 'IND-TN-07-SP-0007';
+                  }
                   window.localStorage.setItem('ghostnet_session_user', JSON.stringify(savedUser));
                 }
                 setCurrentUser(savedUser);
@@ -1189,7 +1274,7 @@ export default function App() {
               username: qUser,
               password: qPass,
               role: isRescue ? 'RESCUE_CREW' : 'FISHERMAN',
-              boatTag: data.user.boat_id || (data.user.name?.toLowerCase().includes('hari') ? 'IND-TN-02-MM-4491' : (isRescue ? 'Poseidon Alpha (MM-01)' : 'IND-TN-02-MM-4491')),
+              boatTag: data.user.boat_id || (data.user.name?.toLowerCase().includes('hari') ? 'IND-TN-07-SP-0007' : (isRescue ? 'Poseidon Alpha (MM-01)' : 'IND-TN-07-SP-0007')),
               phone: data.user.phone || qUser,
               port: isRescue ? 'Chennai Coastal Patrol Station' : 'Kasimedu Coastal Harbour'
             };
@@ -1340,7 +1425,7 @@ export default function App() {
         username: cleanUser,
         password: regPassword,
         role: selectedRole,
-        boatTag: regBoatTag.trim() || (selectedRole === 'FISHERMAN' ? 'IND-TN-02-MM-4410' : 'Poseidon Alpha (MM-01)'),
+        boatTag: regBoatTag.trim() || (selectedRole === 'FISHERMAN' ? 'IND-TN-07-SP-0007' : 'Poseidon Alpha (MM-01)'),
         phone: userIdentifier,
         port: selectedRole === 'FISHERMAN' ? 'Kasimedu Coastal Harbour' : 'Chennai Coastal Patrol Station'
       };
@@ -2067,6 +2152,287 @@ export default function App() {
     showToast(nextLang === 'TA' ? 'மொழி: தமிழ் தேர்ந்தெடுக்கப்பட்டது' : 'Language: English Active');
   };
 
+  const renderDatabaseModal = () => (
+    <Modal
+      visible={showDbModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowDbModal(false)}
+    >
+      <View style={{ flex: 1, backgroundColor: 'rgba(3, 11, 20, 0.95)', justifyContent: 'center', padding: 12 }}>
+        <View style={{
+          backgroundColor: '#0a141d',
+          borderRadius: 16,
+          maxHeight: '92%',
+          borderWidth: 1.5,
+          borderColor: '#1e293b',
+          overflow: 'hidden'
+        }}>
+          {/* Header */}
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: 14,
+            borderBottomWidth: 1,
+            borderBottomColor: '#1e293b',
+            backgroundColor: '#0f172a'
+          }}>
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 18 }}>📊</Text>
+                <Text style={{ color: '#e0fdff', fontSize: 16, fontWeight: '800' }}>
+                  {language === 'TA' ? 'நேரலை தரவுத்தள பார்வை' : 'Live Database Inspector'}
+                </Text>
+              </View>
+              <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 2 }}>
+                {language === 'TA' ? 'கிளவுட் சர்வர் & மொபைல் மெமரி' : 'Railway Cloud DB & Phone Storage'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowDbModal(false)}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#1e293b',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <Text style={{ color: '#94a3b8', fontSize: 14, fontWeight: 'bold' }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Stats Grid */}
+          <View style={{ flexDirection: 'row', padding: 10, gap: 6, backgroundColor: '#070f18' }}>
+            <View style={{ flex: 1, backgroundColor: '#131f2e', padding: 8, borderRadius: 8, borderWidth: 0.5, borderColor: '#1e293b' }}>
+              <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '700' }}>TOTAL USERS</Text>
+              <Text style={{ color: '#38bdf8', fontSize: 15, fontWeight: '800', marginTop: 2 }}>
+                {allMergedUsers.length}
+              </Text>
+            </View>
+            <View style={{ flex: 1.4, backgroundColor: '#131f2e', padding: 8, borderRadius: 8, borderWidth: 0.5, borderColor: '#1e293b' }}>
+              <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '700' }}>ACTIVE BOAT NO.</Text>
+              <Text style={{ color: '#4ade80', fontSize: 12, fontWeight: '800', marginTop: 2 }} numberOfLines={1}>
+                IND-TN-07-SP-0007
+              </Text>
+            </View>
+            <View style={{ flex: 1.1, backgroundColor: '#131f2e', padding: 8, borderRadius: 8, borderWidth: 0.5, borderColor: '#1e293b' }}>
+              <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '700' }}>CLOUD BACKEND</Text>
+              <Text style={{ color: '#22c55e', fontSize: 11, fontWeight: '800', marginTop: 3 }}>
+                🟢 Railway
+              </Text>
+            </View>
+          </View>
+
+          <ScrollView style={{ padding: 12 }} showsVerticalScrollIndicator={false}>
+            {/* Section 1: Registered Users & Boat Numbers */}
+            <View style={{ marginBottom: 14 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ color: '#e0fdff', fontSize: 13, fontWeight: '800' }}>
+                  👥 {language === 'TA' ? 'பதிவு செய்யப்பட்ட பயனர்கள்' : 'Registered Users & Boats'} ({allMergedUsers.length})
+                </Text>
+                <TouchableOpacity
+                  onPress={fetchDbData}
+                  style={{
+                    backgroundColor: '#1e293b',
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 6,
+                    borderWidth: 0.5,
+                    borderColor: '#38bdf8'
+                  }}
+                >
+                  <Text style={{ color: '#38bdf8', fontSize: 10, fontWeight: '700' }}>
+                    {loadingDb ? '⏳ Loading...' : '🔄 Refresh'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {allMergedUsers.length === 0 ? (
+                <View style={{ backgroundColor: '#131f2e', padding: 12, borderRadius: 8 }}>
+                  <Text style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic', textAlign: 'center' }}>
+                    No users registered in database yet.
+                  </Text>
+                </View>
+              ) : (
+                allMergedUsers.map((u: any, idx: number) => {
+                  const isFisher = u.role === 'FISHERMAN' || u.role === 'fisher';
+                  const boat = u.boat_id || u.boatTag || (isFisher ? 'IND-TN-07-SP-0007' : 'Poseidon Alpha (MM-01)');
+                  return (
+                    <View
+                      key={u.id || u.username || idx}
+                      style={{
+                        backgroundColor: '#131f2e',
+                        borderRadius: 8,
+                        padding: 10,
+                        marginBottom: 6,
+                        borderLeftWidth: 3,
+                        borderLeftColor: isFisher ? '#38bdf8' : '#a855f7'
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ color: '#f1f5f9', fontSize: 13, fontWeight: '700' }}>
+                          {u.name || u.username}
+                        </Text>
+                        <View style={{
+                          backgroundColor: isFisher ? 'rgba(56, 189, 248, 0.2)' : 'rgba(168, 85, 247, 0.2)',
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 4
+                        }}>
+                          <Text style={{ color: isFisher ? '#38bdf8' : '#c084fc', fontSize: 9, fontWeight: '800' }}>
+                            {isFisher ? 'FISHERMAN' : 'RESCUE CREW'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 5 }}>
+                        <Text style={{ color: '#94a3b8', fontSize: 11 }}>
+                          📱 {u.phone || u.username}
+                        </Text>
+                        <View style={{ backgroundColor: '#0284c7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4 }}>
+                          <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '800' }}>
+                            🛥️ {boat}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ marginTop: 4 }}>
+                        <Text style={{ color: '#64748b', fontSize: 9 }}>
+                          {u.isCloud ? '☁️ Stored in Cloud DB' : '📱 Saved in Phone Local Storage'}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+
+            {/* Section 2: Lost Gear Reports */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ color: '#e0fdff', fontSize: 13, fontWeight: '800', marginBottom: 8 }}>
+                📍 {language === 'TA' ? 'இழந்த வலை அறிக்கைகள்' : 'Lost Gear Reports in DB'} ({allMergedReports.length})
+              </Text>
+              {allMergedReports.length === 0 ? (
+                <View style={{ backgroundColor: '#131f2e', padding: 12, borderRadius: 8 }}>
+                  <Text style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic', textAlign: 'center' }}>
+                    No reports filed yet.
+                  </Text>
+                </View>
+              ) : (
+                allMergedReports.map((r: any, idx: number) => {
+                  const statusStr = (r.status || '').toLowerCase();
+                  const isRec = statusStr.includes('recover') || r.stage === 3;
+                  const isProg = statusStr.includes('progress') || r.stage === 2;
+                  return (
+                    <View
+                      key={r.id || idx}
+                      style={{
+                        backgroundColor: '#131f2e',
+                        borderRadius: 8,
+                        padding: 10,
+                        marginBottom: 6,
+                        borderLeftWidth: 3,
+                        borderLeftColor: isRec ? '#4ade80' : isProg ? '#38bdf8' : '#facc15'
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ color: '#f1f5f9', fontSize: 12, fontWeight: '700' }}>
+                          {r.gear_type || r.gearType || 'Lost Gear'}
+                        </Text>
+                        <View style={{
+                          backgroundColor: isRec ? 'rgba(74, 222, 128, 0.2)' : isProg ? 'rgba(56, 189, 248, 0.2)' : 'rgba(250, 204, 21, 0.2)',
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 4
+                        }}>
+                          <Text style={{
+                            color: isRec ? '#4ade80' : isProg ? '#38bdf8' : '#facc15',
+                            fontSize: 9,
+                            fontWeight: '800'
+                          }}>
+                            {isRec ? '🟢 RECOVERED' : isProg ? '🔵 IN PROGRESS' : '🟡 AWAITING RESCUE'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={{ color: '#94a3b8', fontSize: 10, marginTop: 4 }}>
+                        By: {r.reported_by || r.reportedBy || 'Fisherman'} • Boat: {r.vessel_tag || r.vesselTag || 'IND-TN-07-SP-0007'}
+                      </Text>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+
+            {/* Section 3: Cloud & Manual Clear Controls */}
+            <View style={{ backgroundColor: '#131f2e', borderRadius: 8, padding: 10, gap: 8, marginBottom: 10 }}>
+              <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '700' }}>DATABASE CONTROLS</Text>
+              
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#1e293b',
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  borderRadius: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}
+                onPress={() => {
+                  try {
+                    Linking.openURL('https://ghostnet-ai-production.up.railway.app/docs');
+                  } catch (e) {}
+                }}
+              >
+                <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: '700' }}>
+                  🌐 Open Railway Swagger API Docs
+                </Text>
+                <Text style={{ color: '#64748b', fontSize: 11 }}>➔</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderColor: 'rgba(239, 68, 68, 0.3)',
+                  alignItems: 'center'
+                }}
+                onPress={() => {
+                  handleClearAllData();
+                  setShowDbModal(false);
+                }}
+              >
+                <Text style={{ color: '#f87171', fontSize: 11, fontWeight: '800' }}>
+                  🗑️ Clear Database & Reset All Data (Manual Wipe)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+
+          {/* Modal Footer Close */}
+          <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: '#1e293b', backgroundColor: '#0f172a' }}>
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#38bdf8',
+                paddingVertical: 10,
+                borderRadius: 8,
+                alignItems: 'center'
+              }}
+              onPress={() => setShowDbModal(false)}
+            >
+              <Text style={{ color: '#030b14', fontSize: 13, fontWeight: '800' }}>Close Inspector</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   // -------------------------------------------------------------
   // 1. RENDER: SPLASH SCREEN
   // -------------------------------------------------------------
@@ -2332,6 +2698,32 @@ export default function App() {
             </Text>
           </TouchableOpacity>
 
+          {/* View Database Button */}
+          <TouchableOpacity
+            style={{
+              marginTop: 16,
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              alignItems: 'center',
+              backgroundColor: 'rgba(56, 189, 248, 0.15)',
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: '#38bdf8',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              gap: 8
+            }}
+            onPress={() => {
+              fetchDbData();
+              setShowDbModal(true);
+            }}
+          >
+            <Text style={{ fontSize: 16 }}>📊</Text>
+            <Text style={{ color: '#38bdf8', fontSize: 13, fontWeight: '800' }}>
+              {language === 'TA' ? 'தரவுத்தளத்தைப் பார்க்கவும் (View Database)' : '📊 View Database (Users & Boat Numbers)'}
+            </Text>
+          </TouchableOpacity>
+
           {/* Wipe Database & Local Cache Button */}
           <TouchableOpacity
             style={{
@@ -2358,6 +2750,7 @@ export default function App() {
             <Text style={styles.toastText}>{toastMessage}</Text>
           </View>
         )}
+        {renderDatabaseModal()}
       </SafeAreaView>
     );
   }
@@ -2388,6 +2781,26 @@ export default function App() {
               </View>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                  paddingHorizontal: 8,
+                  paddingVertical: 5,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: 'rgba(56, 189, 248, 0.5)',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 3
+                }}
+                onPress={() => {
+                  fetchDbData();
+                  setShowDbModal(true);
+                }}
+              >
+                <Text style={{ fontSize: 11 }}>📊</Text>
+                <Text style={{ fontSize: 11, color: '#38bdf8', fontWeight: '800' }}>DB</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.langBadge} onPress={toggleLanguage}>
                 <Text style={styles.langBadgeText}>
                   {language === 'EN' ? 'தமிழ்' : 'EN'}
@@ -2801,6 +3214,7 @@ export default function App() {
             <Text style={styles.toastText}>{toastMessage}</Text>
           </View>
         )}
+        {renderDatabaseModal()}
       </SafeAreaView>
     );
   }
@@ -2826,6 +3240,26 @@ export default function App() {
             </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <TouchableOpacity
+              style={{
+                backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                paddingHorizontal: 8,
+                paddingVertical: 5,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: 'rgba(56, 189, 248, 0.5)',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 3
+              }}
+              onPress={() => {
+                fetchDbData();
+                setShowDbModal(true);
+              }}
+            >
+              <Text style={{ fontSize: 11 }}>📊</Text>
+              <Text style={{ fontSize: 11, color: '#38bdf8', fontWeight: '800' }}>DB</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.langBadge} onPress={toggleLanguage}>
               <Text style={styles.langBadgeText}>
                 {language === 'EN' ? 'தமிழ்' : 'EN'}
@@ -3415,6 +3849,7 @@ export default function App() {
             <Text style={styles.toastText}>{toastMessage}</Text>
           </View>
         )}
+        {renderDatabaseModal()}
       </ScrollView>
     </SafeAreaView>
   );

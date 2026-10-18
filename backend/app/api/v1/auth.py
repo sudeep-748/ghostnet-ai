@@ -37,7 +37,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="This username is already taken. Please choose another username.")
     
     user_id = str(uuid.uuid4())
-    boat_reg = user_in.boat_id or ("IND-TN-02-MM-4410" if user_in.role == "fisher" else "Poseidon Alpha (MM-01)")
+    boat_reg = user_in.boat_id or ("IND-TN-07-SP-0007" if user_in.role == "fisher" else "Poseidon Alpha (MM-01)")
     
     # Check or create Boat in boats sub-database
     boat = db.query(Boat).filter(Boat.registration_number == boat_reg).first()
@@ -93,3 +93,20 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+@router.get("/users")
+def get_all_users(db: Session = Depends(get_db)):
+    """Returns all registered users in the database for transparent inspection."""
+    users = db.query(User).all()
+    return [
+        {
+            "id": u.id,
+            "name": u.name,
+            "phone": u.phone,
+            "role": u.role,
+            "boat_id": u.boat_id,
+            "created_at": u.created_at.isoformat() if u.created_at else None
+        }
+        for u in users
+    ]
+
