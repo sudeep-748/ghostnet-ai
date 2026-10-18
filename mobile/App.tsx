@@ -572,56 +572,7 @@ export default function App() {
         }
       }
     } catch (e) {}
-    return [
-      {
-        id: 'rep-1',
-        gearType: 'Monofilament Gillnet',
-        reportedBy: 'Selvam Ramanathan',
-        vesselTag: 'IND-TN-07-SP-0007',
-        reportedTime: 'Reported Today, 06:40 AM',
-        timestamp: Date.now() - 3600000 * 2,
-        latLong: '13.125°N, 80.31°E • 25m depth',
-        stage: 1,
-        stageTitle: 'Stage 1',
-        stageColor: '#78350f',
-        stageBg: '#fef3c7',
-        stageText: '🟡 Awaiting Rescue Team Assignment',
-        detail: 'Priority: High Attention',
-        subDetail: 'Awaiting Rescue Dispatch'
-      },
-      {
-        id: 'rep-2',
-        gearType: 'Trawl Net',
-        reportedBy: 'Karthik S.',
-        vesselTag: 'TN-04-F-8821',
-        reportedTime: 'Reported Yesterday',
-        timestamp: Date.now() - 86400000,
-        latLong: '13.084°N, 80.29°E • 42m depth',
-        stage: 2,
-        stageTitle: 'Stage 2',
-        stageColor: '#083344',
-        stageBg: '#cffafe',
-        stageText: '🔵 Rescue in Progress — Boat Delta En Route',
-        detail: 'Vessel: Coastal Patrol 04',
-        subDetail: 'Approaching coordinates'
-      },
-      {
-        id: 'rep-3',
-        gearType: 'Gillnet',
-        reportedBy: 'Selvam Ramanathan',
-        vesselTag: 'IND-TN-07-SP-0007',
-        reportedTime: 'Reported 3 Days ago',
-        timestamp: Date.now() - 86400000 * 3,
-        latLong: '13.190°N, 80.35°E • 18m depth',
-        stage: 3,
-        stageTitle: 'Stage 3',
-        stageColor: '#064e3b',
-        stageBg: '#d1fae5',
-        stageText: '🟢 Successfully Recovered (1.5 Tons hauled)',
-        detail: 'Hauled & Verified: 1.5 Tons',
-        subDetail: 'Mission Closed • Circular Registry'
-      }
-    ];
+    return [];
   });
 
   // -------------------------------------------------------------
@@ -653,6 +604,7 @@ export default function App() {
 
   // Database Inspector State
   const [showDbModal, setShowDbModal] = useState<boolean>(false);
+  const [dbViewMode, setDbViewMode] = useState<'TOTAL' | 'MINE'>('TOTAL');
   const [cloudUsers, setCloudUsers] = useState<any[]>([]);
   const [cloudReports, setCloudReports] = useState<any[]>([]);
   const [loadingDb, setLoadingDb] = useState<boolean>(false);
@@ -731,6 +683,22 @@ export default function App() {
     });
     return list;
   }, [reports, cloudReports]);
+
+  const myFilteredReports = useMemo(() => {
+    if (!currentUser?.name) return allMergedReports;
+    const currName = (currentUser.name || '').toLowerCase().trim();
+    const currBoat = (currentUser.boatTag || '').toLowerCase().trim();
+    return allMergedReports.filter((r) => {
+      const repName = (r.reportedBy || '').toLowerCase().trim();
+      const repBoat = (r.vesselTag || '').toLowerCase().trim();
+      return (
+        repName === currName ||
+        repName.includes(currName) ||
+        currName.includes(repName) ||
+        (currBoat && repBoat && repBoat.includes(currBoat))
+      );
+    });
+  }, [allMergedReports, currentUser]);
 
 
   // Live Real-Time GPS Tracking of Rescue Officer / Boat (moves as the user moves)
@@ -917,7 +885,7 @@ export default function App() {
         // 3. Auto-recover status: If target is no longer in pending queue and not active, it was completed!
         const isStillInTargets = targets.some((t) => t.id === rep.id || t.gearName.toLowerCase() === rep.gearType.toLowerCase());
         const isCurrentActive = selectedTarget && (selectedTarget.id === rep.id || selectedTarget.gearName.toLowerCase() === rep.gearType.toLowerCase());
-        if (!isStillInTargets && !isCurrentActive && updated.stage === 1 && updated.id !== 'rep-1') {
+        if (!isStillInTargets && !isCurrentActive && updated.stage === 1) {
           updated.stage = 3 as const;
           updated.stageTitle = 'Stage 3';
           updated.stageColor = '#064e3b';
@@ -1488,17 +1456,25 @@ export default function App() {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.clear();
+        window.localStorage.setItem('ghostnet_saved_reports', '[]');
+        window.localStorage.setItem('ghostnet_pending_targets', '[]');
+        window.localStorage.setItem('ghostnet_registered_accounts', '[]');
       }
     } catch (e) {}
     setAccounts([]);
     setReports([]);
     setTargets([]);
+    setCloudUsers([]);
+    setCloudReports([]);
+    setSelectedTarget(null);
+    setActiveMissionId(null);
     setLoginUsername('');
     setLoginPassword('');
     setRegFullName('');
     setRegUsername('');
     setRegPhone('');
     setRegPassword('');
+    saveSession(null);
     try {
       await fetch(`${API_BASE}/api/v1/auth/reset-database`, { method: 'POST' });
     } catch (e) {}
@@ -2215,7 +2191,7 @@ export default function App() {
             <View style={{ flex: 1.4, backgroundColor: '#131f2e', padding: 8, borderRadius: 8, borderWidth: 0.5, borderColor: '#1e293b' }}>
               <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '700' }}>ACTIVE BOAT NO.</Text>
               <Text style={{ color: '#4ade80', fontSize: 12, fontWeight: '800', marginTop: 2 }} numberOfLines={1}>
-                IND-TN-07-SP-0007
+                {currentUser?.boatTag || 'IND-TN-07-SP-0007'}
               </Text>
             </View>
             <View style={{ flex: 1.1, backgroundColor: '#131f2e', padding: 8, borderRadius: 8, borderWidth: 0.5, borderColor: '#1e293b' }}>
@@ -2224,6 +2200,43 @@ export default function App() {
                 🟢 Railway
               </Text>
             </View>
+          </View>
+
+          {/* Database Inspector Mode Toggle */}
+          <View style={{ flexDirection: 'row', paddingHorizontal: 10, paddingBottom: 6, gap: 8, backgroundColor: '#070f18' }}>
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                paddingVertical: 7,
+                alignItems: 'center',
+                borderRadius: 6,
+                backgroundColor: dbViewMode === 'TOTAL' ? '#0284c7' : '#131f2e',
+                borderWidth: 1,
+                borderColor: dbViewMode === 'TOTAL' ? '#38bdf8' : '#1e293b'
+              }}
+              onPress={() => setDbViewMode('TOTAL')}
+            >
+              <Text style={{ color: dbViewMode === 'TOTAL' ? '#ffffff' : '#94a3b8', fontSize: 11, fontWeight: '800' }}>
+                🌐 Total Database ({allMergedReports.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                paddingVertical: 7,
+                alignItems: 'center',
+                borderRadius: 6,
+                backgroundColor: dbViewMode === 'MINE' ? '#0284c7' : '#131f2e',
+                borderWidth: 1,
+                borderColor: dbViewMode === 'MINE' ? '#38bdf8' : '#1e293b'
+              }}
+              onPress={() => setDbViewMode('MINE')}
+            >
+              <Text style={{ color: dbViewMode === 'MINE' ? '#ffffff' : '#94a3b8', fontSize: 11, fontWeight: '800' }}>
+                👤 My Reports ({myFilteredReports.length})
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <ScrollView style={{ padding: 12 }} showsVerticalScrollIndicator={false}>
@@ -2313,16 +2326,16 @@ export default function App() {
             {/* Section 2: Lost Gear Reports */}
             <View style={{ marginBottom: 14 }}>
               <Text style={{ color: '#e0fdff', fontSize: 13, fontWeight: '800', marginBottom: 8 }}>
-                📍 {language === 'TA' ? 'இழந்த வலை அறிக்கைகள்' : 'Lost Gear Reports in DB'} ({allMergedReports.length})
+                📍 {dbViewMode === 'MINE' ? 'My Reported Nets' : (language === 'TA' ? 'இழந்த வலை அறிக்கைகள்' : 'Lost Gear Reports in DB')} ({(dbViewMode === 'MINE' ? myFilteredReports : allMergedReports).length})
               </Text>
-              {allMergedReports.length === 0 ? (
-                <View style={{ backgroundColor: '#131f2e', padding: 12, borderRadius: 8 }}>
+              {(dbViewMode === 'MINE' ? myFilteredReports : allMergedReports).length === 0 ? (
+                <View style={{ backgroundColor: '#131f2e', padding: 14, borderRadius: 8, alignItems: 'center' }}>
                   <Text style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic', textAlign: 'center' }}>
-                    No reports filed yet.
+                    {dbViewMode === 'MINE' ? 'You have no reports filed yet.' : 'No reports in database yet.'}
                   </Text>
                 </View>
               ) : (
-                allMergedReports.map((r: any, idx: number) => {
+                (dbViewMode === 'MINE' ? myFilteredReports : allMergedReports).map((r: any, idx: number) => {
                   const statusStr = (r.status || '').toLowerCase();
                   const isRec = statusStr.includes('recover') || r.stage === 3;
                   const isProg = statusStr.includes('progress') || r.stage === 2;
@@ -3120,16 +3133,34 @@ export default function App() {
               </View>
 
               {/* List of Reports filtered for current fisherman */}
-              {reports
-                .filter(
-                  (item) =>
-                    !currentUser?.name ||
-                    item.reportedBy.toLowerCase() === currentUser.name.toLowerCase() ||
-                    item.reportedBy.toLowerCase().includes(currentUser.name.toLowerCase()) ||
-                    currentUser.name.toLowerCase().includes(item.reportedBy.toLowerCase()) ||
-                    currentUser.username === 'selvam_04'
-                )
-                .map((item) => (
+              {reports.filter(
+                (item) =>
+                  !currentUser?.name ||
+                  item.reportedBy.toLowerCase() === currentUser.name.toLowerCase() ||
+                  item.reportedBy.toLowerCase().includes(currentUser.name.toLowerCase()) ||
+                  currentUser.name.toLowerCase().includes(item.reportedBy.toLowerCase()) ||
+                  (currentUser.boatTag && item.vesselTag?.toLowerCase().includes(currentUser.boatTag.toLowerCase()))
+              ).length === 0 ? (
+                <View style={{ backgroundColor: '#131f2e', padding: 20, borderRadius: 12, alignItems: 'center', marginVertical: 8 }}>
+                  <Text style={{ fontSize: 28, marginBottom: 8 }}>📋</Text>
+                  <Text style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center' }}>
+                    {language === 'TA' ? 'இன்னும் எந்த இழந்த வலை அறிக்கைகளும் பதிவு செய்யப்படவில்லை.' : 'No lost gear reports logged yet.'}
+                  </Text>
+                  <Text style={{ color: '#64748b', fontSize: 11, textAlign: 'center', marginTop: 4 }}>
+                    {language === 'TA' ? 'புதிய அறிக்கையை சமர்ப்பிக்க கீழே தட்டவும்' : 'Tap below to file a new lost gear report'}
+                  </Text>
+                </View>
+              ) : (
+                reports
+                  .filter(
+                    (item) =>
+                      !currentUser?.name ||
+                      item.reportedBy.toLowerCase() === currentUser.name.toLowerCase() ||
+                      item.reportedBy.toLowerCase().includes(currentUser.name.toLowerCase()) ||
+                      currentUser.name.toLowerCase().includes(item.reportedBy.toLowerCase()) ||
+                      (currentUser.boatTag && item.vesselTag?.toLowerCase().includes(currentUser.boatTag.toLowerCase()))
+                  )
+                  .map((item) => (
                 <View key={item.id} style={styles.polarWhiteCard}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <View style={{ flex: 1 }}>
@@ -3193,7 +3224,7 @@ export default function App() {
                     </Text>
                   </View>
                 </View>
-              ))}
+              )))}
 
               <TouchableOpacity
                 style={styles.fileAnotherBtn}
