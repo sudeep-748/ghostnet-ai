@@ -3679,24 +3679,42 @@ export default function App() {
         ) : (
           /* TAB B: CURRENT MISSION HUD NAVIGATION SCREEN */
           <View style={{ gap: 14 }}>
-            {!selectedTarget ? (
-              <View style={[styles.polarWhiteCard, { padding: 24, alignItems: 'center' }]}>
-                <Text style={{ fontSize: 36, marginBottom: 8 }}>⚓</Text>
-                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>
-                  {t('standbyModeTitle')}
-                </Text>
-                <Text style={{ fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 4 }}>
-                  {t('standbyModeDesc')}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.declareSubmitBtn, { marginTop: 16, width: '100%' }]}
-                  onPress={() => setCrewTab('REPORTS')}
-                >
-                  <Text style={styles.declareSubmitText}>{t('viewPendingBtn')}</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <>
+            {(() => {
+              const isMyActiveMission = Boolean(
+                selectedTarget &&
+                (
+                  (selectedTarget.assignedTeam && (
+                    selectedTarget.assignedTeam.toLowerCase().trim() === currentUser?.name?.toLowerCase().trim() ||
+                    selectedTarget.assignedTeam.toLowerCase().trim() === currentUser?.username?.toLowerCase().trim()
+                  )) ||
+                  (selectedTarget.assignedBoat && (
+                    selectedTarget.assignedBoat.toLowerCase().trim() === currentUser?.boatTag?.toLowerCase().trim()
+                  ))
+                )
+              );
+
+              if (!selectedTarget || !isMyActiveMission) {
+                return (
+                  <View style={[styles.polarWhiteCard, { padding: 24, alignItems: 'center' }]}>
+                    <Text style={{ fontSize: 36, marginBottom: 8 }}>⚓</Text>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>
+                      {t('standbyModeTitle')}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 4 }}>
+                      {t('standbyModeDesc')}
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.declareSubmitBtn, { marginTop: 16, width: '100%' }]}
+                      onPress={() => setCrewTab('REPORTS')}
+                    >
+                      <Text style={styles.declareSubmitText}>{t('viewPendingBtn')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }
+
+              return (
+                <>
                 {/* Active Mission Target Strip */}
                 {(() => {
                   const targetCoords = parseCoordinates(selectedTarget.coords);
@@ -3863,7 +3881,8 @@ export default function App() {
                   </TouchableOpacity>
                 </View>
               </>
-            )}
+            );
+          })()}
           </View>
         )}
 
