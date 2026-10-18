@@ -900,7 +900,7 @@ export default function App() {
 
   // Auto-restore officer's active in-progress mission on login or re-connection
   useEffect(() => {
-    if (!selectedTarget && targets.length > 0 && currentUser) {
+    if (currentUser && currentUser.role === 'RESCUE_CREW') {
       const myActive = targets.find((tgt) => {
         const teamMatch =
           tgt.assignedTeam?.toLowerCase().trim() === currentUser.name?.toLowerCase().trim() ||
@@ -916,9 +916,18 @@ export default function App() {
             window.localStorage.setItem('ghostnet_selected_target', JSON.stringify(myActive));
           }
         } catch (e) {}
+      } else {
+        setSelectedTarget(null);
+        setActiveMissionId(null);
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.removeItem('ghostnet_selected_target');
+            window.localStorage.removeItem('ghostnet_active_mission_id');
+          }
+        } catch (e) {}
       }
     }
-  }, [targets, currentUser, selectedTarget]);
+  }, [targets, currentUser]);
 
   // Auto-heal and sync legacy reports stored in phone localStorage
   useEffect(() => {
@@ -992,6 +1001,21 @@ export default function App() {
     }
   };
 
+  const handleLogout = () => {
+    saveSession(null);
+    setSelectedTarget(null);
+    setActiveMissionId(null);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('ghostnet_session_user');
+        window.localStorage.removeItem('ghostnet_selected_target');
+        window.localStorage.removeItem('ghostnet_active_mission_id');
+      }
+    } catch (e) {}
+    setScreen('LOGIN_ROLE');
+    showToast('Logged out successfully.');
+  };
+
   // -------------------------------------------------------------
   // Full-Stack Offline Queue & Real-Time Sync Engine
   // -------------------------------------------------------------
@@ -1055,164 +1079,199 @@ export default function App() {
 
       if (res.ok) {
         const liveReports = await res.json();
-        if (Array.isArray(liveReports) && liveReports.length > 0) {
-          // A. Map into Rescue Targets (only unrecovered/pending lost gear)
-          const unrecoveredReports = liveReports.filter((r: any) => {
-            const isCompleted = Array.isArray(allMissions) && allMissions.some(
-              (m: any) => (m.report_id === r.id || m.report_id === r.client_report_id) && m.status === 'completed'
-            );
-            return r.sync_status !== 'recovered' && !isCompleted;
-          });
-
-          const mappedTargets: RescueTarget[] = unrecoveredReports.map((r: any, idx: number) => {
-            const mat = r.material || (r.notes?.includes('Polymer: ') ? r.notes.split('Polymer: ')[1].split(' •')[0].toLowerCase() : 'nylon');
-            const isFloating = mat === 'polyethylene' || mat === 'polypropylene';
-            // Parse exact Depth & Mass from server fields or embedded notes
-            let netDepth = r.loss_depth_m;
-            if (!netDepth && r.notes) {
-              const dMatch = r.notes.match(/Depth:\s*(\d+)/i);
-              if (dMatch) netDepth = parseInt(dMatch[1], 10);
-            }
-            if (!netDepth) netDepth = 25;
-
-            let netMass = r.estimated_weight_kg;
-            if (!netMass && r.notes) {
-              const wMatch = r.notes.match(/Weight:\s*(\d+(?:\.\d+)?)/i);
-              if (wMatch) netMass = parseFloat(wMatch[1]);
-            }
-            if (!netMass) netMass = 1.2;
-
-            // Check if another rescue team has already claimed/started this mission!
-            const activeM = Array.isArray(allMissions)
-              ? allMissions.find((m: any) => (m.report_id === r.id || m.report_id === r.client_report_id) && m.status === 'active')
-              : null;
-            const isAssigned = !!activeM;
-            const assignedTeam = activeM ? (activeM.team_name || activeM.team_id || 'Rescue Crew') : undefined;
-            const assignedBoat = activeM ? (activeM.boat_name || activeM.boat_id || 'Patrol Vessel') : undefined;
-            const isMyMission = isAssigned && (
-              assignedTeam?.toLowerCase() === currentUser.name?.toLowerCase() ||
-              assignedTeam?.toLowerCase() === currentUser.username?.toLowerCase() ||
-              activeM?.team_id === currentUser.username
-            );
-
-            // Calculate live nautical distance & AIS bearing vector from rescue boat GPS fix
-            const rLat = r.loss_latitude || 13.1250;
-            const rLon = r.loss_longitude || 80.3150;
-            const liveDistNm = calculateDistanceNm(rescueCoords.lat, rescueCoords.lon, rLat, rLon);
-            const liveBearing = calculateBearing(rescueCoords.lat, rescueCoords.lon, rLat, rLon);
-
-            // Calculate human-friendly time elapsed using real timestamp
-            const reportDate = r.loss_time || r.created_at;
-            const timeAgo = formatRelativeTime(reportDate, language);
-
-            return {
-              id: r.client_report_id || r.id || `tgt-${idx}`,
-              priorityLabel: isAssigned
-                ? isMyMission
-                  ? '🟢 YOUR ACTIVE MISSION'
-                  : `🔵 IN PROGRESS (${assignedTeam})`
-                : `FCFS Priority #${idx + 1}`,
-              reportedAgo: timeAgo,
-              timestamp: reportDate ? new Date(reportDate).getTime() : Date.now(),
-              distanceNm: `${liveDistNm} NM away`,
-              gearName: r.gear_type || 'Monofilament Gillnet',
-              description: r.notes || 'Subsurface entanglement risk off Kasimedu',
-              depthM: netDepth,
-              massKg: netMass,
-              sector: 'Kasimedu Sector',
-              coords: `${rLat.toFixed(4)}°N, ${rLon.toFixed(4)}°E`,
-              aisVector: `AIS Vector: ${liveBearing}`,
-              accentColor: isAssigned ? (isMyMission ? '#10b981' : '#3b82f6') : (isFloating ? '#38bdf8' : '#f59e0b'),
-              material: mat,
-              buoyancy: isFloating ? 'Floats (Surface)' : 'Sinks (Subsurface)',
-              isAssigned,
-              assignedTeam,
-              assignedBoat,
-              isMyMission
-            };
-          });
-
-          setTargets(mappedTargets);
-          try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-              window.localStorage.setItem('ghostnet_pending_targets', JSON.stringify(mappedTargets));
-            }
-          } catch (e) {}
-
-          // B. Map into Fisherman's Reports Tracker
-          const mappedReports: RecoveryReport[] = liveReports.map((r: any, idx: number) => {
-            const repId = r.client_report_id || r.id || `rep-${idx}`;
-            let reporterName = r.reporter_name;
-            if (!reporterName || reporterName === 'Fisherman') {
-              if (r.notes?.includes('Reported by ')) {
-                reporterName = r.notes.split('Reported by ')[1].split(' (')[0].trim();
-              } else if (r.reported_by) {
-                const userMatch = accounts.find((a) => a.id === r.reported_by || a.username === r.reported_by || a.name === r.reported_by);
-                if (userMatch) reporterName = userMatch.name;
-                else if (currentUser && (currentUser.name === r.reported_by || currentUser.id === r.reported_by)) reporterName = currentUser.name;
+        if (Array.isArray(liveReports)) {
+          if (liveReports.length === 0) {
+            setReports([]);
+            setTargets([]);
+            setCloudReports([]);
+            setSelectedTarget(null);
+            setActiveMissionId(null);
+            try {
+              if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('ghostnet_saved_reports', '[]');
+                window.localStorage.setItem('ghostnet_pending_targets', '[]');
+                window.localStorage.removeItem('ghostnet_selected_target');
+                window.localStorage.removeItem('ghostnet_active_mission_id');
               }
-            }
-            if (!reporterName || (reporterName.includes('-') && reporterName.length > 20)) {
-              reporterName = currentUser?.name || 'Registered Fisherman';
-            }
+            } catch (e) {}
+          } else {
+            // A. Map into Rescue Targets (only unrecovered/pending lost gear)
+            const unrecoveredReports = liveReports.filter((r: any) => {
+              const isCompleted = Array.isArray(allMissions) && allMissions.some(
+                (m: any) => (m.report_id === r.id || m.report_id === r.client_report_id) && m.status === 'completed'
+              );
+              return r.sync_status !== 'recovered' && !isCompleted;
+            });
 
-            let vesselTag = r.vessel_tag;
-            if (!vesselTag || !vesselTag.includes('IND-TN')) {
-              if (r.notes?.includes('(') && r.notes?.includes(')')) {
-                const tag = r.notes.split('(')[1].split(')')[0].trim();
-                if (tag.includes('IND-TN') || tag.includes('TN-')) vesselTag = tag;
+            const mappedTargets: RescueTarget[] = unrecoveredReports.map((r: any, idx: number) => {
+              const mat = r.material || (r.notes?.includes('Polymer: ') ? r.notes.split('Polymer: ')[1].split(' •')[0].toLowerCase() : 'nylon');
+              const isFloating = mat === 'polyethylene' || mat === 'polypropylene';
+              // Parse exact Depth & Mass from server fields or embedded notes
+              let netDepth = r.loss_depth_m;
+              if (!netDepth && r.notes) {
+                const dMatch = r.notes.match(/Depth:\s*(\d+)/i);
+                if (dMatch) netDepth = parseInt(dMatch[1], 10);
               }
-            }
-            if (!vesselTag) vesselTag = currentUser?.boatTag || 'IND-TN-07-SP-0007';
-            const reportDate = r.loss_time || r.created_at;
-            const timeStr = formatRelativeTime(reportDate, language);
+              if (!netDepth) netDepth = 25;
 
-            const isCompletedMission = Array.isArray(allMissions)
-              ? allMissions.some((m: any) => (m.report_id === r.id || m.report_id === r.client_report_id) && m.status === 'completed')
-              : false;
-            const isRecovered = r.sync_status === 'recovered' || isCompletedMission;
+              let netMass = r.estimated_weight_kg;
+              if (!netMass && r.notes) {
+                const wMatch = r.notes.match(/Weight:\s*(\d+(?:\.\d+)?)/i);
+                if (wMatch) netMass = parseFloat(wMatch[1]);
+              }
+              if (!netMass) netMass = 1.2;
 
-            let repDepth = r.loss_depth_m;
-            if (!repDepth && r.notes) {
-              const dm = r.notes.match(/Depth:\s*(\d+)/i);
-              if (dm) repDepth = parseInt(dm[1], 10);
-            }
-            if (!repDepth) repDepth = 25;
+              // Check if another rescue team has already claimed/started this mission!
+              const activeM = Array.isArray(allMissions)
+                ? allMissions.find((m: any) => (m.report_id === r.id || m.report_id === r.client_report_id) && m.status === 'active')
+                : null;
+              const isAssigned = !!activeM;
+              const assignedTeam = activeM ? (activeM.team_name || activeM.team_id || 'Rescue Crew') : undefined;
+              const assignedBoat = activeM ? (activeM.boat_name || activeM.boat_id || 'Patrol Vessel') : undefined;
+              const isMyMission = isAssigned && (
+                assignedTeam?.toLowerCase() === currentUser.name?.toLowerCase() ||
+                assignedTeam?.toLowerCase() === currentUser.username?.toLowerCase() ||
+                activeM?.team_id === currentUser.username
+              );
 
-            let repWeight = r.estimated_weight_kg;
-            if (!repWeight && r.notes) {
-              const wm = r.notes.match(/Weight:\s*(\d+(?:\.\d+)?)/i);
-              if (wm) repWeight = parseFloat(wm[1]);
-            }
-            const weightSuffix = repWeight ? ` • ${repWeight} Tons` : '';
+              // Calculate live nautical distance & AIS bearing vector from rescue boat GPS fix
+              const rLat = r.loss_latitude || 13.1250;
+              const rLon = r.loss_longitude || 80.3150;
+              const liveDistNm = calculateDistanceNm(rescueCoords.lat, rescueCoords.lon, rLat, rLon);
+              const liveBearing = calculateBearing(rescueCoords.lat, rescueCoords.lon, rLat, rLon);
 
-            return {
-              id: repId,
-              gearType: r.gear_type || 'Monofilament Gillnet',
-              reportedBy: reporterName,
-              vesselTag: vesselTag,
-              reportedTime: timeStr,
-              timestamp: reportDate ? new Date(reportDate).getTime() : Date.now(),
-              latLong: `${(r.loss_latitude || 13.1250).toFixed(4)}°N, ${(r.loss_longitude || 80.3150).toFixed(4)}°E • ${repDepth}m depth${weightSuffix}`,
-              depthM: repDepth,
-              stage: isRecovered ? 3 : 1,
-              stageTitle: isRecovered ? 'Stage 3' : 'Stage 1',
-              stageColor: isRecovered ? '#064e3b' : '#78350f',
-              stageBg: isRecovered ? '#d1fae5' : '#fef3c7',
-              stageText: isRecovered ? '🟢 Successfully Recovered & Hauled' : '🟡 Awaiting Rescue Team Assignment',
-              detail: isRecovered ? `Hauled & Verified: ${repWeight || 1.2} Tons` : 'Priority: High Attention',
-              subDetail: isRecovered ? 'Mission Closed • Circular Registry' : 'Awaiting Rescue Dispatch'
-            };
-          });
+              // Calculate human-friendly time elapsed using real timestamp
+              const reportDate = r.loss_time || r.created_at;
+              const timeAgo = formatRelativeTime(reportDate, language);
 
-          setReports(mappedReports);
-          try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-              window.localStorage.setItem('ghostnet_saved_reports', JSON.stringify(mappedReports));
-            }
-          } catch (e) {}
+              return {
+                id: r.client_report_id || r.id || `tgt-${idx}`,
+                priorityLabel: isAssigned
+                  ? isMyMission
+                    ? '🟢 YOUR ACTIVE MISSION'
+                    : `🔵 IN PROGRESS (${assignedTeam})`
+                  : `FCFS Priority #${idx + 1}`,
+                reportedAgo: timeAgo,
+                timestamp: reportDate ? new Date(reportDate).getTime() : Date.now(),
+                distanceNm: `${liveDistNm} NM away`,
+                gearName: r.gear_type || 'Monofilament Gillnet',
+                description: r.notes || 'Subsurface entanglement risk off Kasimedu',
+                depthM: netDepth,
+                massKg: netMass,
+                sector: 'Kasimedu Sector',
+                coords: `${rLat.toFixed(4)}°N, ${rLon.toFixed(4)}°E`,
+                aisVector: `AIS Vector: ${liveBearing}`,
+                accentColor: isAssigned ? (isMyMission ? '#10b981' : '#3b82f6') : (isFloating ? '#38bdf8' : '#f59e0b'),
+                material: mat,
+                buoyancy: isFloating ? 'Floats (Surface)' : 'Sinks (Subsurface)',
+                isAssigned,
+                assignedTeam,
+                assignedBoat,
+                isMyMission
+              };
+            });
+
+            setTargets(mappedTargets);
+            try {
+              if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('ghostnet_pending_targets', JSON.stringify(mappedTargets));
+              }
+            } catch (e) {}
+
+            // B. Map into Fisherman's Reports Tracker
+            const mappedReports: RecoveryReport[] = liveReports.map((r: any, idx: number) => {
+              const repId = r.client_report_id || r.id || `rep-${idx}`;
+              let reporterName = r.reporter_name;
+              if (!reporterName || reporterName === 'Fisherman') {
+                if (r.notes?.includes('Reported by ')) {
+                  reporterName = r.notes.split('Reported by ')[1].split(' (')[0].trim();
+                } else if (r.reported_by) {
+                  const userMatch = accounts.find((a) => a.id === r.reported_by || a.username === r.reported_by || a.name === r.reported_by);
+                  if (userMatch) reporterName = userMatch.name;
+                  else if (currentUser && (currentUser.name === r.reported_by || currentUser.id === r.reported_by)) reporterName = currentUser.name;
+                }
+              }
+              if (!reporterName || (reporterName.includes('-') && reporterName.length > 20)) {
+                reporterName = currentUser?.name || 'Registered Fisherman';
+              }
+
+              let vesselTag = r.vessel_tag;
+              if (!vesselTag || !vesselTag.includes('IND-TN')) {
+                if (r.notes?.includes('(') && r.notes?.includes(')')) {
+                  const tag = r.notes.split('(')[1].split(')')[0].trim();
+                  if (tag.includes('IND-TN') || tag.includes('TN-')) vesselTag = tag;
+                }
+              }
+              if (!vesselTag) vesselTag = currentUser?.boatTag || 'IND-TN-07-SP-0007';
+              const reportDate = r.loss_time || r.created_at;
+              const timeStr = formatRelativeTime(reportDate, language);
+
+              const isCompletedMission = Array.isArray(allMissions)
+                ? allMissions.some((m: any) => (m.report_id === r.id || m.report_id === r.client_report_id) && m.status === 'completed')
+                : false;
+              const isRecovered = r.sync_status === 'recovered' || isCompletedMission;
+
+              let repDepth = r.loss_depth_m;
+              if (!repDepth && r.notes) {
+                const dm = r.notes.match(/Depth:\s*(\d+)/i);
+                if (dm) repDepth = parseInt(dm[1], 10);
+              }
+              if (!repDepth) repDepth = 25;
+
+              let repWeight = r.estimated_weight_kg;
+              if (!repWeight && r.notes) {
+                const wm = r.notes.match(/Weight:\s*(\d+(?:\.\d+)?)/i);
+                if (wm) repWeight = parseFloat(wm[1]);
+              }
+              const weightSuffix = repWeight ? ` • ${repWeight} Tons` : '';
+
+              return {
+                id: repId,
+                gearType: r.gear_type || 'Monofilament Gillnet',
+                reportedBy: reporterName,
+                vesselTag: vesselTag,
+                reportedTime: timeStr,
+                timestamp: reportDate ? new Date(reportDate).getTime() : Date.now(),
+                latLong: `${(r.loss_latitude || 13.1250).toFixed(4)}°N, ${(r.loss_longitude || 80.3150).toFixed(4)}°E • ${repDepth}m depth${weightSuffix}`,
+                depthM: repDepth,
+                stage: isRecovered ? 3 : 1,
+                stageTitle: isRecovered ? 'Stage 3' : 'Stage 1',
+                stageColor: isRecovered ? '#064e3b' : '#78350f',
+                stageBg: isRecovered ? '#d1fae5' : '#fef3c7',
+                stageText: isRecovered ? '🟢 Successfully Recovered & Hauled' : '🟡 Awaiting Rescue Team Assignment',
+                detail: isRecovered ? `Hauled & Verified: ${repWeight || 1.2} Tons` : 'Priority: High Attention',
+                subDetail: isRecovered ? 'Mission Closed • Circular Registry' : 'Awaiting Rescue Dispatch'
+              };
+            });
+
+            setReports(mappedReports);
+            try {
+              if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('ghostnet_saved_reports', JSON.stringify(mappedReports));
+              }
+            } catch (e) {}
+          }
         }
       }
+
+      // 3. Sync registered user accounts if database was wiped
+      try {
+        const usersRes = await fetch(`${API_BASE}/api/v1/auth/users`).catch(() => null);
+        if (usersRes && usersRes.ok) {
+          const uList = await usersRes.json();
+          if (Array.isArray(uList)) {
+            setCloudUsers(uList);
+            if (uList.length === 0) {
+              setAccounts([]);
+              try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                  window.localStorage.setItem('ghostnet_registered_accounts', '[]');
+                }
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (e) {}
     } catch (e) {
       // Offline fallback: targets already loaded from localStorage
     }
@@ -2881,11 +2940,7 @@ export default function App() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.switchRoleBadge}
-                onPress={() => {
-                  saveSession(null);
-                  setScreen('LOGIN_ROLE');
-                  showToast('Logged out successfully.');
-                }}
+                onPress={handleLogout}
               >
                 <Text style={{ fontSize: 12, color: '#f87171', fontWeight: '700' }}>{t('logout')}</Text>
               </TouchableOpacity>
@@ -3358,11 +3413,7 @@ export default function App() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.switchRoleBadge}
-              onPress={() => {
-                saveSession(null);
-                setScreen('LOGIN_ROLE');
-                showToast('Logged out successfully.');
-              }}
+              onPress={handleLogout}
             >
               <Text style={{ fontSize: 12, color: '#f87171', fontWeight: '700' }}>{t('logout')}</Text>
             </TouchableOpacity>
@@ -3453,10 +3504,9 @@ export default function App() {
                 </Text>
               </View>
             ) : (
-              targets.map((tgt) => {
-                const isThisMyMission =
-                  tgt.isMyMission ||
-                  (tgt.isAssigned && Boolean(
+              targets.map((tgt, idx) => {
+                const isThisMyMission = Boolean(
+                  tgt.isAssigned && (
                     (tgt.assignedTeam && (
                       tgt.assignedTeam.toLowerCase().trim() === currentUser?.name?.toLowerCase().trim() ||
                       tgt.assignedTeam.toLowerCase().trim() === currentUser?.username?.toLowerCase().trim()
@@ -3464,16 +3514,25 @@ export default function App() {
                     (tgt.assignedBoat && (
                       tgt.assignedBoat.toLowerCase().trim() === currentUser?.boatTag?.toLowerCase().trim()
                     ))
-                  ));
+                  )
+                );
+
+                const cardAccent = tgt.isAssigned
+                  ? (isThisMyMission ? '#10b981' : '#3b82f6')
+                  : (tgt.buoyancy?.includes('Float') ? '#38bdf8' : '#f59e0b');
+
+                const priorityLabel = tgt.isAssigned
+                  ? (isThisMyMission ? '🟢 YOUR ACTIVE MISSION' : `🔵 IN PROGRESS (${tgt.assignedTeam})`)
+                  : `FCFS Priority #${idx + 1}`;
 
                 return (
                   <View key={tgt.id} style={styles.targetCardDark}>
-                    <View style={[styles.targetSideStrip, { backgroundColor: tgt.accentColor }]} />
+                    <View style={[styles.targetSideStrip, { backgroundColor: cardAccent }]} />
                     <View style={styles.targetCardHeader}>
                       <View style={styles.targetPriorityBadge}>
-                        <View style={[styles.targetPriorityDot, { backgroundColor: tgt.accentColor }]} />
-                        <Text style={[styles.targetPriorityTxt, { color: tgt.accentColor }]}>
-                          {tgt.priorityLabel} • {getReportTimeDisplay(tgt, language)}
+                        <View style={[styles.targetPriorityDot, { backgroundColor: cardAccent }]} />
+                        <Text style={[styles.targetPriorityTxt, { color: cardAccent }]}>
+                          {priorityLabel} • {getReportTimeDisplay(tgt, language)}
                         </Text>
                       </View>
                       <Text style={styles.targetDistanceTxt}>{tgt.distanceNm}</Text>
