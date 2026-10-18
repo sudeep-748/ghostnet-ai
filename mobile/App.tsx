@@ -445,6 +445,25 @@ const formatRelativeTime = (dateInput: any, lang: Language = 'EN'): string => {
   return lang === 'TA' ? `${dateStr} அன்று, ${timeStr}` : `Reported ${dateStr}, ${timeStr}`;
 };
 
+// Robust extractor for reports & targets: extracts real epoch from rep- or tgt- ID or fallback
+const getReportTimeDisplay = (item: { timestamp?: number; id?: string; reportedTime?: string; reportedAgo?: string }, lang: Language = 'EN'): string => {
+  if (item.timestamp && typeof item.timestamp === 'number') {
+    return formatRelativeTime(item.timestamp, lang);
+  }
+  if (item.id && typeof item.id === 'string') {
+    const rawNum = item.id.replace(/^(rep|tgt)-/, '');
+    const epoch = parseInt(rawNum, 10);
+    if (!isNaN(epoch) && epoch > 1700000000000) {
+      return formatRelativeTime(epoch, lang);
+    }
+  }
+  const fallbackStr = item.reportedTime || item.reportedAgo;
+  if (fallbackStr && fallbackStr !== 'Reported Just Now' && fallbackStr !== 'Recent Report') {
+    return formatRelativeTime(fallbackStr, lang);
+  }
+  return lang === 'TA' ? 'நேற்று அறிவிக்கப்பட்டது' : 'Reported Yesterday';
+};
+
 export default function App() {
   // Navigation & Screen State
   const [screen, setScreen] = useState<ScreenMode>('SPLASH');
@@ -527,7 +546,28 @@ export default function App() {
         const saved = window.localStorage.getItem('ghostnet_saved_reports');
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((item: any) => {
+              const cleanDetail = item.detail && !item.detail.includes('Ping')
+                ? item.detail
+                : (item.stage === 1 ? 'Priority: High Attention' : item.stage === 2 ? 'Vessel: Rescue Boat' : 'Hauled & Verified: 1.2 Tons');
+              const cleanSubDetail = item.subDetail && !item.subDetail.toLowerCase().includes('ping') && !item.subDetail.toLowerCase().includes('transponder')
+                ? item.subDetail
+                : (item.stage === 1 ? 'Awaiting Rescue Dispatch' : item.stage === 2 ? 'Approaching coordinates' : 'Mission Closed • Circular Registry');
+              let tStamp = item.timestamp;
+              if (!tStamp && item.id && typeof item.id === 'string') {
+                const rawNum = item.id.replace(/^(rep|tgt)-/, '');
+                const epoch = parseInt(rawNum, 10);
+                if (!isNaN(epoch) && epoch > 1700000000000) tStamp = epoch;
+              }
+              return {
+                ...item,
+                timestamp: tStamp,
+                detail: cleanDetail,
+                subDetail: cleanSubDetail
+              };
+            });
+          }
         }
       }
     } catch (e) {}
@@ -762,6 +802,63 @@ export default function App() {
       }
     }
   }, [targets, currentUser, selectedTarget]);
+
+  // Auto-heal and sync legacy reports stored in phone localStorage
+  useEffect(() => {
+    setReports((prevReports) => {
+      let changed = false;
+      const healed = prevReports.map((rep) => {
+        let updated = { ...rep };
+
+        // 1. Recover real timestamp from ID if missing or hardcoded
+        if (!updated.timestamp && updated.id && typeof updated.id === 'string') {
+          const rawNum = updated.id.replace(/^(rep|tgt)-/, '');
+          const epoch = parseInt(rawNum, 10);
+          if (!isNaN(epoch) && epoch > 1700000000000) {
+            updated.timestamp = epoch;
+            updated.reportedTime = formatRelativeTime(epoch, language);
+            changed = true;
+          }
+        }
+
+        // 2. Wipe any legacy "Ping Interval" and "Auto-pinging transponder" text from cache
+        if (!updated.detail || updated.detail.includes('Ping')) {
+          updated.detail = updated.stage === 1 ? 'Priority: High Attention' : updated.stage === 2 ? 'Vessel: Rescue Boat' : 'Hauled & Verified: 1.2 Tons';
+          changed = true;
+        }
+        if (!updated.subDetail || updated.subDetail.toLowerCase().includes('ping') || updated.subDetail.toLowerCase().includes('transponder')) {
+          updated.subDetail = updated.stage === 1 ? 'Awaiting Rescue Dispatch' : updated.stage === 2 ? 'Approaching coordinates' : 'Mission Closed • Circular Registry';
+          changed = true;
+        }
+
+        // 3. Auto-recover status: If target is no longer in pending queue and not active, it was completed!
+        const isStillInTargets = targets.some((t) => t.id === rep.id || t.gearName.toLowerCase() === rep.gearType.toLowerCase());
+        const isCurrentActive = selectedTarget && (selectedTarget.id === rep.id || selectedTarget.gearName.toLowerCase() === rep.gearType.toLowerCase());
+        if (!isStillInTargets && !isCurrentActive && updated.stage === 1 && updated.id !== 'rep-1') {
+          updated.stage = 3 as const;
+          updated.stageTitle = 'Stage 3';
+          updated.stageColor = '#064e3b';
+          updated.stageBg = '#d1fae5';
+          updated.stageText = '🟢 Successfully Recovered (Hauled to shore)';
+          updated.detail = 'Hauled & Verified: 1.2 Tons';
+          updated.subDetail = 'Mission Closed • Circular Registry';
+          changed = true;
+        }
+
+        return updated;
+      });
+
+      if (changed) {
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem('ghostnet_saved_reports', JSON.stringify(healed));
+          }
+        } catch (e) {}
+        return healed;
+      }
+      return prevReports;
+    });
+  }, [targets, selectedTarget, language]);
 
   // Storage helper for persistence across refreshes & app re-opens
   const saveSession = (user: UserAccount | null) => {
@@ -2634,7 +2731,7 @@ export default function App() {
                             : 'கூண்டு / பொறி (Trap)'
                           : item.gearType}{' '}
                         •{' '}
-                        {formatRelativeTime(item.timestamp || item.reportedTime, language)}
+                        {getReportTimeDisplay(item, language)}
                       </Text>
                       <Text style={styles.trackerCoordsText}>📍 {item.latLong}</Text>
                       <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
@@ -2666,8 +2763,10 @@ export default function App() {
                         ? item.stage === 1
                           ? 'அவசர கவனம்'
                           : item.stage === 2
-                          ? item.detail.replace('Vessel:', 'மீட்பு படகு:')
-                          : item.detail.replace('Hauled & Verified:', 'எடை சரிபார்க்கப்பட்டது:').replace('Tons', 'டன்கள்')
+                          ? (item.detail?.replace('Vessel:', 'மீட்பு படகு:') || 'மீட்பு படகு')
+                          : (item.detail?.replace('Hauled & Verified:', 'எடை சரிபார்க்கப்பட்டது:').replace('Tons', 'டன்கள்') || 'எடை சரிபார்க்கப்பட்டது')
+                        : !item.detail || item.detail.includes('Ping')
+                        ? (item.stage === 1 ? 'Priority: High Attention' : item.stage === 2 ? 'Vessel: Rescue Boat' : 'Hauled & Verified: 1.2 Tons')
                         : item.detail}
                     </Text>
                     <Text style={styles.trackerMetaRight}>
@@ -2675,8 +2774,10 @@ export default function App() {
                         ? item.stage === 1
                           ? 'மீட்புக் குழு காத்திருப்பு'
                           : item.stage === 2
-                          ? item.subDetail.replace('Approaching coordinates', 'இலக்கை நெருங்குகிறது')
+                          ? 'இலக்கை நெருங்குகிறது'
                           : 'பணி நிறைவுற்றது • சுழற்சி பதிவு'
+                        : !item.subDetail || item.subDetail.toLowerCase().includes('ping') || item.subDetail.toLowerCase().includes('transponder')
+                        ? (item.stage === 1 ? 'Awaiting Rescue Dispatch' : item.stage === 2 ? 'Approaching coordinates' : 'Mission Closed • Circular Registry')
                         : item.subDetail}
                     </Text>
                   </View>
@@ -2764,7 +2865,7 @@ export default function App() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                 <Text style={styles.criticalBadgeText}>{t('criticalNetAlertBadge')}</Text>
                 <Text style={styles.criticalTimeText}>
-                  {formatRelativeTime(targets[0].timestamp || targets[0].reportedAgo, language)}
+                  {getReportTimeDisplay(targets[0], language)}
                 </Text>
               </View>
               <Text style={styles.criticalTitleText}>
@@ -2849,7 +2950,7 @@ export default function App() {
                       <View style={styles.targetPriorityBadge}>
                         <View style={[styles.targetPriorityDot, { backgroundColor: tgt.accentColor }]} />
                         <Text style={[styles.targetPriorityTxt, { color: tgt.accentColor }]}>
-                          {tgt.priorityLabel} • {formatRelativeTime(tgt.timestamp || tgt.reportedAgo, language)}
+                          {tgt.priorityLabel} • {getReportTimeDisplay(tgt, language)}
                         </Text>
                       </View>
                       <Text style={styles.targetDistanceTxt}>{tgt.distanceNm}</Text>
