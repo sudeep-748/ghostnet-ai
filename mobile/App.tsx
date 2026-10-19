@@ -16,6 +16,9 @@ import { StatusBar } from 'expo-status-bar';
 
 // Local asset bundled directly inside the mobile app
 const LOGO_IMG = require('./assets/logo.png');
+const SONAR_IMG = require('./assets/sonar_echogram.png');
+
+import { analyzeAcousticScan, saveSonarAuditLogOffline } from './sonar_engine';
 
 // Live cloud API base URL (Railway production backend)
 const API_BASE = 'https://ghostnet-ai-production.up.railway.app';
@@ -609,6 +612,7 @@ export default function App() {
   });
   const [showPreDepartureModal, setShowPreDepartureModal] = useState<boolean>(false);
   const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
+  const [showSonarConsole, setShowSonarConsole] = useState<boolean>(false);
   const [verifiedWeight, setVerifiedWeight] = useState<number>(1.2);
   const [isNavigating, setIsNavigating] = useState<boolean>(false);
   const [navProgress, setNavProgress] = useState<number>(0);
@@ -2228,6 +2232,7 @@ export default function App() {
 
       setSelectedTarget(null);
       setActiveMissionId(null);
+      setShowSonarConsole(false);
 
       // 4. Trigger background sync to confirm DB status
       setTimeout(() => {
@@ -3366,8 +3371,293 @@ export default function App() {
   }
 
   // -------------------------------------------------------------
-  // 4. RENDER: RESCUE BOAT CREW TACTICAL MISSION HUD
+  // 4A. DEDICATED SIDE-SCAN SONAR AI ACOUSTIC CONSOLE (GOOGLE STITCH UI)
   // -------------------------------------------------------------
+  if (showSonarConsole) {
+    const sonarData = analyzeAcousticScan({
+      depthM: selectedTarget?.depthM,
+      gearName: selectedTarget?.gearName,
+      coords: selectedTarget?.coords
+    });
+
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: '#050b12' }]}>
+        <StatusBar style="light" />
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          {/* Header Bar */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 }}
+              onPress={() => setShowSonarConsole(false)}
+            >
+              <Text style={{ color: '#00f2fe', fontSize: 16, fontWeight: 'bold' }}>←</Text>
+              <Text style={{ color: '#00f2fe', fontSize: 13, fontWeight: '700' }}>Back to Navigation Map</Text>
+            </TouchableOpacity>
+
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: 'rgba(16, 185, 129, 0.12)',
+              borderWidth: 1,
+              borderColor: 'rgba(16, 185, 129, 0.4)',
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 6
+            }}>
+              <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#10b981' }} />
+              <Text style={{ color: '#6ee7b7', fontSize: 10, fontWeight: '800', fontFamily: 'monospace' }}>
+                TRANSDUCER ACTIVE • 455 KHZ
+              </Text>
+            </View>
+          </View>
+
+          {/* Title & Subtitle */}
+          <Text style={{ color: '#f8fafc', fontSize: 20, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 }}>
+            SONAR AI ACOUSTIC CONSOLE
+          </Text>
+          <Text style={{ color: '#94a3b8', fontSize: 12, marginBottom: 14 }}>
+            Target: Lost {selectedTarget?.gearName || 'Gillnet'} • {selectedTarget?.coords ? selectedTarget.coords : 'Kasimedu Deep Corridor (Sector 04)'}
+          </Text>
+
+          {/* Central Sonar Echogram Display (Exact Google Stitch Layout) */}
+          <View style={{
+            borderRadius: 12,
+            borderWidth: 1.5,
+            borderColor: '#1e293b',
+            overflow: 'hidden',
+            backgroundColor: '#020617',
+            marginBottom: 10
+          }}>
+            <Image
+              source={SONAR_IMG}
+              style={{ width: '100%', height: 260, resizeMode: 'cover' }}
+            />
+          </View>
+
+          {/* Telemetry Strip (Bottom of Echogram) */}
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: '#0f172a',
+            borderRadius: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderWidth: 1,
+            borderColor: '#1e293b',
+            marginBottom: 14
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 13 }}>🧭</Text>
+              <Text style={{ color: '#e2e8f0', fontSize: 11, fontWeight: '700', fontFamily: 'monospace' }}>
+                {selectedTarget?.coords || '13°07\'42.1"N 80°18\'09.4"E'}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Text style={{ color: '#94a3b8', fontSize: 11, fontFamily: 'monospace' }}>
+                SPD: <Text style={{ color: '#38bdf8', fontWeight: 'bold' }}>{rescueCoords.speedKn > 0 ? rescueCoords.speedKn.toFixed(1) : '1.8'} KTS</Text>
+              </Text>
+              <Text style={{ color: '#94a3b8', fontSize: 11, fontFamily: 'monospace' }}>
+                HDG: <Text style={{ color: '#ffd166', fontWeight: 'bold' }}>084°</Text>
+              </Text>
+            </View>
+          </View>
+
+          {/* 2x2 Telemetry Grid (Exact Stitch Layout) */}
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+            {/* Box 1: Seabed Depth */}
+            <View style={{
+              flex: 1,
+              backgroundColor: '#0c1522',
+              borderRadius: 10,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: '#1e293b'
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '800', letterSpacing: 0.6 }}>SEABED DEPTH</Text>
+                <Text style={{ color: '#38bdf8', fontSize: 13 }}>↓</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3, marginTop: 4 }}>
+                <Text style={{ color: '#ffffff', fontSize: 24, fontWeight: '900' }}>{sonarData.seabedDepthM}</Text>
+                <Text style={{ color: '#38bdf8', fontSize: 13, fontWeight: '700' }}>m</Text>
+              </View>
+              <Text style={{ color: '#64748b', fontSize: 10, marginTop: 4 }}>Nadir acoustic altimeter reading</Text>
+            </View>
+
+            {/* Box 2: Net Elevation */}
+            <View style={{
+              flex: 1,
+              backgroundColor: '#0c1522',
+              borderRadius: 10,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: '#1e293b'
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '800', letterSpacing: 0.6 }}>NET ELEVATION</Text>
+                <Text style={{ color: '#f59e0b', fontSize: 13 }}>↑</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3, marginTop: 4 }}>
+                <Text style={{ color: '#f59e0b', fontSize: 24, fontWeight: '900' }}>{sonarData.netElevationM}</Text>
+                <Text style={{ color: '#f59e0b', fontSize: 13, fontWeight: '700' }}>m</Text>
+              </View>
+              <Text style={{ color: '#64748b', fontSize: 10, marginTop: 4 }}>Height net floats above bottom</Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+            {/* Box 3: Hook Drop Target */}
+            <View style={{
+              flex: 1,
+              backgroundColor: '#0c1522',
+              borderRadius: 10,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: '#1e293b'
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '800', letterSpacing: 0.6 }}>HOOK DROP TARGET</Text>
+                <Text style={{ color: '#34d399', fontSize: 13 }}>⚓</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3, marginTop: 4 }}>
+                <Text style={{ color: '#34d399', fontSize: 24, fontWeight: '900' }}>{sonarData.extraction.hookTargetDepthM}</Text>
+                <Text style={{ color: '#34d399', fontSize: 13, fontWeight: '700' }}>m</Text>
+              </View>
+              <Text style={{ color: '#64748b', fontSize: 10, marginTop: 4 }}>Recommended grapple contact point</Text>
+            </View>
+
+            {/* Box 4: Bottom Substrate */}
+            <View style={{
+              flex: 1,
+              backgroundColor: '#0c1522',
+              borderRadius: 10,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: '#1e293b'
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '800', letterSpacing: 0.6 }}>BOTTOM SUBSTRATE</Text>
+                <Text style={{ color: '#94a3b8', fontSize: 13 }}>⬡</Text>
+              </View>
+              <Text style={{ color: '#ffffff', fontSize: 18, fontWeight: '900', marginTop: 6 }}>{sonarData.bottomSubstrate}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10b981' }} />
+                <Text style={{ color: '#10b981', fontSize: 10, fontWeight: '700' }}>Snag Risk: {sonarData.extraction.snagRisk}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Recovery Protocol Card (Exact Stitch Layout) */}
+          <View style={{
+            backgroundColor: '#0c1522',
+            borderRadius: 12,
+            padding: 14,
+            borderWidth: 1,
+            borderColor: '#1e293b',
+            marginBottom: 14
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Text style={{ fontSize: 16 }}>⚙️</Text>
+              <Text style={{ color: '#e2e8f0', fontSize: 12, fontWeight: '900', letterSpacing: 0.6 }}>
+                RECOVERY PROTOCOL: FOUR-PRONG GRAPPLE
+              </Text>
+            </View>
+
+            {/* Step 1: Cable Scope */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ color: '#10b981', fontSize: 14 }}>✓</Text>
+                <Text style={{ color: '#cbd5e1', fontSize: 11, fontWeight: '600' }}>
+                  Cable Scope: {sonarData.extraction.cableScopeM}m Steel Cable Paid Out @ 1.5 kn
+                </Text>
+              </View>
+              <Text style={{ color: '#10b981', fontSize: 10, fontWeight: '900' }}>DONE</Text>
+            </View>
+
+            {/* Step 2: Tension Spike */}
+            <View style={{ marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10b981' }} />
+                  <Text style={{ color: '#f8fafc', fontSize: 11, fontWeight: '700' }}>
+                    Tension Spike: Target Hooked! Winch Load {sonarData.extraction.winchLoadKg} kg
+                  </Text>
+                </View>
+              </View>
+              {/* Green Progress Bar */}
+              <View style={{ height: 6, backgroundColor: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+                <View style={{ width: '78%', height: '100%', backgroundColor: '#00f2fe', borderRadius: 3 }} />
+              </View>
+            </View>
+
+            {/* Step 3: Controlled Haul */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ color: '#ffd166', fontSize: 14 }}>🔄</Text>
+                <Text style={{ color: '#cbd5e1', fontSize: 11, fontWeight: '600' }}>
+                  Controlled Haul: {sonarData.extraction.winchHaulSpeedMs} m/s (Net rising: 12.5m / {sonarData.seabedDepthM}m)
+                </Text>
+              </View>
+              <Text style={{ color: '#ffd166', fontSize: 10, fontWeight: '900' }}>LIFTING</Text>
+            </View>
+
+            {/* Step 4: Big Cyan Button - NET ON DECK */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#00f2fe',
+                borderRadius: 8,
+                paddingVertical: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
+                shadowColor: '#00f2fe',
+                shadowOpacity: 0.3,
+                shadowRadius: 10,
+                elevation: 6
+              }}
+              onPress={() => {
+                saveSonarAuditLogOffline({
+                  ...sonarData,
+                  missionId: activeMissionId || 'MM-01',
+                  vesselTag: currentUser.boatTag,
+                  operatorName: currentUser.name,
+                  isSyncedToBackend: false
+                });
+                setShowSonarConsole(false);
+                setShowVerificationModal(true);
+              }}
+            >
+              <Text style={{ fontSize: 16 }}>⚖️</Text>
+              <Text style={{ color: '#030b14', fontSize: 14, fontWeight: '900', letterSpacing: 0.6 }}>
+                [ NET ON DECK ➔ ]
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Safety Alert Banner (Bottom) */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            backgroundColor: 'rgba(234, 179, 8, 0.1)',
+            borderWidth: 1,
+            borderColor: 'rgba(234, 179, 8, 0.3)',
+            borderRadius: 8,
+            padding: 10
+          }}>
+            <Text style={{ fontSize: 14 }}>⚠️</Text>
+            <Text style={{ color: '#fef08a', fontSize: 11, fontWeight: '600', flex: 1 }}>
+              Surface Warning: Stand clear of deck boom until net is lashed.
+            </Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: '#0a141d' }]}>
       <StatusBar style="light" />
@@ -3862,6 +4152,54 @@ export default function App() {
                     </View>
                   );
                 })()}
+
+                {/* Tactical Side-Scan Sonar Launcher Card */}
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#071018',
+                    borderWidth: 1.5,
+                    borderColor: '#00f2fe',
+                    borderRadius: 12,
+                    padding: 14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginTop: 14,
+                    marginBottom: 12,
+                    shadowColor: '#00f2fe',
+                    shadowOpacity: 0.3,
+                    shadowRadius: 10,
+                    elevation: 5
+                  }}
+                  onPress={() => setShowSonarConsole(true)}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                    <View style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 10,
+                      backgroundColor: 'rgba(0, 242, 254, 0.12)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 1,
+                      borderColor: 'rgba(0, 242, 254, 0.4)'
+                    }}>
+                      <Text style={{ fontSize: 22 }}>📡</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ color: '#00f2fe', fontSize: 13, fontWeight: '900', letterSpacing: 0.4 }}>
+                          ACTIVATE SIDE-SCAN SONAR HUD
+                        </Text>
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10b981' }} />
+                      </View>
+                      <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 2 }}>
+                        Acoustic Waterfall • Net Shadow AI & Extraction Protocol
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ color: '#00f2fe', fontSize: 18, fontWeight: 'bold', marginLeft: 8 }}>➔</Text>
+                </TouchableOpacity>
 
                 {/* Mission Completion Action Card */}
                 <View style={styles.fieldActionCard}>
