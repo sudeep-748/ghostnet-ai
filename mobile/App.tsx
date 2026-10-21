@@ -1706,21 +1706,48 @@ export default function App() {
       background: #061320; color: #e2e8f0; border: 1px solid #1e3a5f; border-radius: 8px; font-size: 12px;
     }
     .leaflet-popup-tip { background: #061320; }
-    .map-legend {
-      position: absolute; bottom: 12px; right: 12px; z-index: 1000;
-      background: rgba(6, 19, 32, 0.92); border: 1px solid #1e3a5f; border-radius: 8px;
-      padding: 8px 12px; color: #e2e8f0; font-size: 11px; backdrop-filter: blur(4px); pointer-events: auto;
+    .map-mode-badge {
+      position: absolute; top: 10px; left: 10px; z-index: 1000;
+      background: rgba(6, 19, 32, 0.92); border: 1px solid rgba(0, 242, 254, 0.4);
+      border-radius: 20px; padding: 4px 10px; color: #00f2fe; font-size: 10px; font-weight: 800;
+      display: flex; align-items: center; gap: 5px; pointer-events: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    }
+    .map-ctrl-stack {
+      position: absolute; top: 10px; right: 10px; z-index: 1000;
+      display: flex; flex-direction: column; gap: 8px; pointer-events: auto;
+    }
+    .map-btn-circle {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: rgba(6, 19, 32, 0.92); border: 1.5px solid #00f2fe; color: #ffffff;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+      transition: all 0.15s ease-in-out; -webkit-tap-highlight-color: transparent;
+    }
+    .map-btn-circle:active {
+      transform: scale(0.92); background: #00f2fe; color: #061320;
+    }
+    .map-btn-label {
+      font-size: 7px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #00f2fe; margin-top: -1px;
+    }
+    .map-legend-container {
+      position: absolute; bottom: 10px; right: 10px; z-index: 1000; pointer-events: auto;
+      display: flex; flex-direction: column; align-items: flex-end;
+    }
+    .legend-pill-btn {
+      background: rgba(6, 19, 32, 0.92); border: 1px solid #1e3a5f; color: #94a3b8;
+      font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 14px;
+      cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+    .legend-pill-btn:hover { color: #00f2fe; border-color: #00f2fe; }
+    .legend-content {
+      display: none; margin-bottom: 6px;
+      background: rgba(6, 19, 32, 0.95); border: 1px solid #1e3a5f; border-radius: 8px;
+      padding: 8px 12px; color: #e2e8f0; font-size: 10px; backdrop-filter: blur(4px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
     }
     .map-legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .map-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
-    .map-ctrl-bar {
-      position: absolute; top: 12px; right: 12px; z-index: 1000; display: flex; gap: 6px; pointer-events: auto;
-    }
-    .map-btn {
-      background: rgba(6, 19, 32, 0.9); border: 1px solid #00f2fe; color: #00f2fe;
-      padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer;
-    }
-    .map-btn:hover { background: #00f2fe; color: #061320; }
     .custom-harbour-pin {
       background: #ffd166; color: #061320; font-size: 10px; font-weight: 800;
       padding: 2px 6px; border-radius: 4px; border: 1px solid #ffffff; white-space: nowrap;
@@ -1734,37 +1761,48 @@ export default function App() {
       color: #38bdf8; font-size: 9px; font-family: monospace; font-weight: bold;
       background: rgba(6, 19, 32, 0.7); padding: 1px 4px; border-radius: 2px; white-space: nowrap;
     }
-    .map-mode-badge {
-      position: absolute; top: 12px; left: 12px; z-index: 1000;
-      background: rgba(6, 19, 32, 0.88); border: 1px solid rgba(0, 242, 254, 0.4);
-      border-radius: 6px; padding: 4px 8px; color: #00f2fe; font-size: 10px; font-weight: 800;
-      display: flex; align-items: center; gap: 5px; pointer-events: none;
-    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div class="map-mode-badge" id="modeBadge">
-    <span style="color:#00e475;">●</span> NAUTICAL VECTOR ACTIVE (OFFLINE READY)
+    <span style="color:#00e475;">●</span> SATELLITE (ONLINE)
   </div>
-  <div class="map-ctrl-bar">
-    <button class="map-btn" id="btnToggleLayer" onclick="toggleLayerMode()">🗺️ Nautical / 🛰️ Satellite</button>
-    <button class="map-btn" onclick="fitAll()">Fit All</button>
-    <button class="map-btn" onclick="centerBoat()">🛥️ Vessel</button>
-    <button class="map-btn" onclick="centerNet()">🔴 Net</button>
+  <div class="map-ctrl-stack">
+    <button class="map-btn-circle" id="btnToggleLayer" onclick="toggleLayerMode()" title="Toggle Nautical / Satellite">
+      <span id="layerIcon" style="font-size:14px;">🗺️</span>
+      <span class="map-btn-label" id="layerLabel">MAP</span>
+    </button>
+    <button class="map-btn-circle" onclick="fitAll()" title="Fit All Waypoints">
+      <span style="font-size:14px;">⛶</span>
+      <span class="map-btn-label">FIT</span>
+    </button>
+    <button class="map-btn-circle" onclick="centerBoat()" title="Focus Rescue Vessel">
+      <span style="font-size:14px;">🛥️</span>
+      <span class="map-btn-label">BOAT</span>
+    </button>
+    <button class="map-btn-circle" onclick="centerNet()" title="Focus Ghost Net Target">
+      <span style="font-size:14px;">🔴</span>
+      <span class="map-btn-label">NET</span>
+    </button>
   </div>
-  <div class="map-legend">
-    <div style="font-weight: bold; margin-bottom: 4px; color: #38bdf8;">PROBABILITY DENSITY</div>
-    <div class="map-legend-row"><div class="map-legend-dot" style="background:#ff2a5f;"></div> 🔴 0h Loss Site (Critical)</div>
-    <div class="map-legend-row"><div class="map-legend-dot" style="background:#00e475;"></div> 🟢 +24h Forecast (High)</div>
-    <div class="map-legend-row"><div class="map-legend-dot" style="background:#ffd166;"></div> 🟡 +48h Forecast (Med)</div>
-    <div class="map-legend-row"><div class="map-legend-dot" style="background:#38bdf8;"></div> 🔵 +72h Forecast (Low)</div>
-    <div class="map-legend-row"><div style="width:14px; height:2px; background:#00e475; border-top:1px dashed #00e475;"></div> Mean Trajectory</div>
-    <div class="map-legend-row"><div style="width:14px; height:2px; background:#00f2fe; border-top:1px dashed #00f2fe;"></div> Course (${distNm} NM)</div>
+  <div class="map-legend-container">
+    <div class="legend-content" id="legendContent">
+      <div style="font-weight: bold; margin-bottom: 5px; color: #38bdf8; font-size: 10px; letter-spacing: 0.5px;">PROBABILITY DENSITY</div>
+      <div class="map-legend-row"><div class="map-legend-dot" style="background:#ff2a5f;"></div> 🔴 0h Loss Site (Critical)</div>
+      <div class="map-legend-row"><div class="map-legend-dot" style="background:#00e475;"></div> 🟢 +24h Forecast (High)</div>
+      <div class="map-legend-row"><div class="map-legend-dot" style="background:#ffd166;"></div> 🟡 +48h Forecast (Med)</div>
+      <div class="map-legend-row"><div class="map-legend-dot" style="background:#38bdf8;"></div> 🔵 +72h Forecast (Low)</div>
+      <div class="map-legend-row"><div style="width:14px; height:2px; background:#00e475; border-top:1px dashed #00e475;"></div> Mean Drift Path</div>
+      <div class="map-legend-row"><div style="width:14px; height:2px; background:#00f2fe; border-top:1px dashed #00f2fe;"></div> Course (${distNm} NM)</div>
+    </div>
+    <button class="legend-pill-btn" onclick="toggleLegend()">
+      ℹ️ Legend <span id="legendChevron">▾</span>
+    </button>
   </div>
   <script>
     var map = L.map('map', { zoomControl: false }).setView([${centerLat}, ${centerLon}], 11);
-    L.control.zoom({ position: 'topleft' }).addTo(map);
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
     // 1. BUILT-IN OFFLINE NAUTICAL VECTOR BASEMAP (WORKS 100% WITHOUT INTERNET AT SEA)
     var nauticalGroup = L.layerGroup().addTo(map);
@@ -1870,12 +1908,28 @@ export default function App() {
         map.removeLayer(satLayer);
         map.removeLayer(refLayer);
         isSatVisible = false;
-        document.getElementById('modeBadge').innerHTML = '<span style="color:#00f2fe;">●</span> TACTICAL NAUTICAL CHART (OFFLINE)';
+        document.getElementById('modeBadge').innerHTML = '<span style="color:#00f2fe;">●</span> OFFLINE NAUTICAL CHART';
+        document.getElementById('layerIcon').innerHTML = '🛰️';
+        document.getElementById('layerLabel').innerHTML = 'SAT';
       } else {
         satLayer.addTo(map);
         refLayer.addTo(map);
         isSatVisible = true;
-        document.getElementById('modeBadge').innerHTML = '<span style="color:#00e475;">●</span> SATELLITE OVERLAY (ONLINE)';
+        document.getElementById('modeBadge').innerHTML = '<span style="color:#00e475;">●</span> SATELLITE (ONLINE)';
+        document.getElementById('layerIcon').innerHTML = '🗺️';
+        document.getElementById('layerLabel').innerHTML = 'MAP';
+      }
+    }
+
+    function toggleLegend() {
+      var box = document.getElementById('legendContent');
+      var chev = document.getElementById('legendChevron');
+      if (box.style.display === 'none' || !box.style.display) {
+        box.style.display = 'block';
+        chev.innerHTML = '▴';
+      } else {
+        box.style.display = 'none';
+        chev.innerHTML = '▾';
       }
     }
 
@@ -4227,7 +4281,7 @@ export default function App() {
                       <View
                         style={{
                           width: '100%',
-                          height: 420,
+                          height: 500,
                           borderRadius: 14,
                           overflow: 'hidden',
                           borderWidth: 1.5,
