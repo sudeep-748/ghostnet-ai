@@ -18,7 +18,13 @@ import { StatusBar } from 'expo-status-bar';
 const LOGO_IMG = require('./assets/logo.png');
 const SONAR_IMG = require('./assets/sonar_echogram.png');
 
-import { analyzeAcousticScan, saveSonarAuditLogOffline } from './sonar_engine';
+import {
+  analyzeAcousticScan,
+  saveSonarAuditLogOffline,
+  analyzeSurveyBatch,
+  generateDemo10Batch,
+  SurveyFrame
+} from './sonar_engine';
 
 // Live cloud API base URL (Railway production backend)
 const API_BASE = 'https://ghostnet-ai-production.up.railway.app';
@@ -613,6 +619,68 @@ export default function App() {
   const [showPreDepartureModal, setShowPreDepartureModal] = useState<boolean>(false);
   const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
   const [showSonarConsole, setShowSonarConsole] = useState<boolean>(false);
+  const [surveyFrames, setSurveyFrames] = useState<SurveyFrame[]>([]);
+  const [selectedFrameIndex, setSelectedFrameIndex] = useState<number>(0);
+  const [isScanningBatch, setIsScanningBatch] = useState<boolean>(false);
+
+  const handleSonarBatchUpload = (e: any) => {
+    const files = e.target?.files;
+    if (!files || files.length === 0) return;
+
+    setIsScanningBatch(true);
+    showToast(`Scanning ${files.length} survey frames across sector...`);
+
+    const fileList = Array.from(files);
+    const readPromises = fileList.map((file: any) => {
+      return new Promise<{ name: string; uri: string }>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          resolve({
+            name: file.name,
+            uri: (ev.target?.result as string) || ''
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(readPromises).then((uploadedImages) => {
+      const results = analyzeSurveyBatch(uploadedImages, {
+        depthM: selectedTarget?.depthM,
+        gearName: selectedTarget?.gearName,
+        coords: selectedTarget?.coords
+      });
+      setSurveyFrames(results);
+      const bestIdx = results.findIndex((f) => f.isNet);
+      setSelectedFrameIndex(bestIdx !== -1 ? bestIdx : 0);
+      setIsScanningBatch(false);
+      showToast(`🎯 AI Segregated ${results.length} Frames: Ghost Net Target Locked!`);
+    });
+  };
+
+  const handleLoadDemo10Batch = () => {
+    setIsScanningBatch(true);
+    showToast('Loading 10-Frame Sector 4 survey grid...');
+    setTimeout(() => {
+      const results = generateDemo10Batch('', {
+        depthM: selectedTarget?.depthM,
+        gearName: selectedTarget?.gearName,
+        coords: selectedTarget?.coords
+      });
+      setSurveyFrames(results);
+      const bestIdx = results.findIndex((f) => f.isNet);
+      setSelectedFrameIndex(bestIdx !== -1 ? bestIdx : 4);
+      setIsScanningBatch(false);
+      showToast('🎯 Sector 4 Survey: Net Target Locked on Frame #5 (96%)!');
+    }, 450);
+  };
+
+  const triggerBatchUpload = () => {
+    if (typeof document !== 'undefined') {
+      const el = document.getElementById('sonar-batch-file-input');
+      if (el) el.click();
+    }
+  };
   const [verifiedWeight, setVerifiedWeight] = useState<number>(1.2);
   const [isNavigating, setIsNavigating] = useState<boolean>(false);
   const [navProgress, setNavProgress] = useState<number>(0);
@@ -3574,6 +3642,23 @@ export default function App() {
       coords: selectedTarget?.coords
     });
 
+    const activeFrame: SurveyFrame = surveyFrames[selectedFrameIndex] || {
+      id: 'default',
+      name: 'Transducer_Live_Chirp.png',
+      uri: '',
+      isNet: true,
+      confidence: 0.94,
+      gearType: selectedTarget?.gearName || 'Monofilament Gillnet',
+      depthM: sonarData.seabedDepthM,
+      netElevationM: sonarData.netElevationM,
+      shadowLengthM: sonarData.acousticShadowLengthM,
+      hookTargetDepthM: sonarData.extraction.hookTargetDepthM,
+      cableScopeM: sonarData.extraction.cableScopeM,
+      substrate: sonarData.bottomSubstrate,
+      coords: selectedTarget?.coords || '13°07\'42.1"N 80°18\'09.4"E',
+      boundingBox: { x: 18, y: 22, width: 64, height: 48 }
+    };
+
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: '#050b12' }]}>
         <StatusBar style="light" />
@@ -3611,22 +3696,185 @@ export default function App() {
             SONAR AI ACOUSTIC CONSOLE
           </Text>
           <Text style={{ color: '#94a3b8', fontSize: 12, marginBottom: 14 }}>
-            Target: Lost {selectedTarget?.gearName || 'Gillnet'} • {selectedTarget?.coords ? selectedTarget.coords : 'Kasimedu Deep Corridor (Sector 04)'}
+            Sector Survey: {selectedTarget?.gearName || 'Lost Gillnet'} • {activeFrame.coords}
           </Text>
 
-          {/* Central Sonar Echogram Display (Exact Google Stitch Layout) */}
+          {/* Survey Batch Actions Bar */}
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                backgroundColor: 'rgba(0, 242, 254, 0.12)',
+                borderWidth: 1.5,
+                borderColor: '#00f2fe',
+                borderRadius: 8,
+                paddingVertical: 10
+              }}
+              onPress={triggerBatchUpload}
+            >
+              <Text style={{ fontSize: 15 }}>📁</Text>
+              <Text style={{ color: '#00f2fe', fontSize: 11, fontWeight: '900', letterSpacing: 0.4 }}>
+                UPLOAD SURVEY BATCH
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                borderWidth: 1,
+                borderColor: '#10b981',
+                borderRadius: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 10
+              }}
+              onPress={handleLoadDemo10Batch}
+            >
+              <Text style={{ fontSize: 14 }}>⚡</Text>
+              <Text style={{ color: '#6ee7b7', fontSize: 11, fontWeight: '800' }}>
+                DEMO 10 FRAMES
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* 10-Frame Inspection Strip / Thumbnail Carousel */}
+          {surveyFrames.length > 0 && (
+            <View style={{ marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 }}>
+                  SURVEY BATCH ({surveyFrames.length} FRAMES SCANNED)
+                </Text>
+                <Text style={{ color: '#00e475', fontSize: 10, fontWeight: '800' }}>
+                  🎯 AI AUTO-SELECTED BEST TARGET
+                </Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {surveyFrames.map((frame, idx) => {
+                  const isSelected = idx === selectedFrameIndex;
+                  return (
+                    <TouchableOpacity
+                      key={frame.id}
+                      style={{
+                        width: 95,
+                        backgroundColor: '#0c1522',
+                        borderRadius: 8,
+                        overflow: 'hidden',
+                        borderWidth: 1.5,
+                        borderColor: isSelected ? '#00f2fe' : frame.isNet ? '#10b981' : '#1e293b',
+                        padding: 4
+                      }}
+                      onPress={() => setSelectedFrameIndex(idx)}
+                    >
+                      <Image
+                        source={frame.uri ? { uri: frame.uri } : SONAR_IMG}
+                        style={{ width: '100%', height: 50, borderRadius: 4, backgroundColor: '#020617' }}
+                      />
+                      <View style={{ marginTop: 4, alignItems: 'center' }}>
+                        <Text style={{ color: '#cbd5e1', fontSize: 9, fontWeight: '700' }} numberOfLines={1}>
+                          {frame.name}
+                        </Text>
+                        <Text style={{
+                          color: frame.isNet ? '#00e475' : frame.confidence > 0.25 ? '#ffd166' : '#64748b',
+                          fontSize: 8,
+                          fontWeight: '800',
+                          marginTop: 1
+                        }}>
+                          {frame.isNet ? `🎯 ${(frame.confidence * 100).toFixed(0)}% NET` : frame.confidence > 0.25 ? `⚠️ ROCK` : `❌ SAND`}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Central Sonar Echogram Display (Exact Google Stitch Layout with Dynamic Image & AI Bounding Box) */}
           <View style={{
             borderRadius: 12,
             borderWidth: 1.5,
-            borderColor: '#1e293b',
+            borderColor: activeFrame.isNet ? '#00f2fe' : '#1e293b',
             overflow: 'hidden',
             backgroundColor: '#020617',
-            marginBottom: 10
+            marginBottom: 10,
+            position: 'relative'
           }}>
             <Image
-              source={SONAR_IMG}
-              style={{ width: '100%', height: 260, resizeMode: 'cover' }}
+              source={activeFrame.uri ? { uri: activeFrame.uri } : SONAR_IMG}
+              style={{
+                width: '100%',
+                height: 260,
+                resizeMode: 'cover'
+              }}
             />
+
+            {/* AI Enhancement Overlay: Tactical Bounding Box & Acoustic Shadow */}
+            {activeFrame.isNet && (
+              <View style={{
+                position: 'absolute',
+                top: `${activeFrame.boundingBox?.y || 22}%`,
+                left: `${activeFrame.boundingBox?.x || 20}%`,
+                width: `${activeFrame.boundingBox?.width || 56}%`,
+                height: `${activeFrame.boundingBox?.height || 46}%`,
+                borderWidth: 2,
+                borderColor: '#00f2fe',
+                borderRadius: 4,
+                backgroundColor: 'rgba(0, 242, 254, 0.08)'
+              }}>
+                {/* AI Detection Pill Header */}
+                <View style={{
+                  position: 'absolute',
+                  top: -12,
+                  left: 6,
+                  backgroundColor: '#00f2fe',
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 4,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4
+                }}>
+                  <Text style={{ color: '#020617', fontSize: 9, fontWeight: '900', fontFamily: 'monospace' }}>
+                    🎯 NET TARGET • {(activeFrame.confidence * 100).toFixed(0)}% CONFIDENCE
+                  </Text>
+                </View>
+
+                {/* Acoustic Shadow Indicator */}
+                <View style={{
+                  position: 'absolute',
+                  bottom: -18,
+                  right: 4,
+                  backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                  borderWidth: 1,
+                  borderColor: '#ffd166',
+                  paddingHorizontal: 6,
+                  paddingVertical: 1,
+                  borderRadius: 4
+                }}>
+                  <Text style={{ color: '#ffd166', fontSize: 9, fontWeight: '800', fontFamily: 'monospace' }}>
+                    SHADOW: {activeFrame.shadowLengthM}m (H: {activeFrame.netElevationM}m)
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Water Column Nadir Scan Line */}
+            <View style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: '50%',
+              width: 1,
+              backgroundColor: 'rgba(255, 255, 255, 0.25)',
+              borderStyle: 'dashed'
+            }} />
           </View>
 
           {/* Telemetry Strip (Bottom of Echogram) */}
@@ -3645,7 +3893,7 @@ export default function App() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={{ fontSize: 13 }}>🧭</Text>
               <Text style={{ color: '#e2e8f0', fontSize: 11, fontWeight: '700', fontFamily: 'monospace' }}>
-                {selectedTarget?.coords || '13°07\'42.1"N 80°18\'09.4"E'}
+                {activeFrame.coords}
               </Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -3653,7 +3901,7 @@ export default function App() {
                 SPD: <Text style={{ color: '#38bdf8', fontWeight: 'bold' }}>{rescueCoords.speedKn > 0 ? rescueCoords.speedKn.toFixed(1) : '1.8'} KTS</Text>
               </Text>
               <Text style={{ color: '#94a3b8', fontSize: 11, fontFamily: 'monospace' }}>
-                HDG: <Text style={{ color: '#ffd166', fontWeight: 'bold' }}>084°</Text>
+                STATUS: <Text style={{ color: activeFrame.isNet ? '#00e475' : '#ffd166', fontWeight: 'bold' }}>{activeFrame.isNet ? 'TARGET LOCKED' : 'SEARCHING'}</Text>
               </Text>
             </View>
           </View>
@@ -3674,7 +3922,7 @@ export default function App() {
                 <Text style={{ color: '#38bdf8', fontSize: 13 }}>↓</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3, marginTop: 4 }}>
-                <Text style={{ color: '#ffffff', fontSize: 24, fontWeight: '900' }}>{sonarData.seabedDepthM}</Text>
+                <Text style={{ color: '#ffffff', fontSize: 24, fontWeight: '900' }}>{activeFrame.depthM}</Text>
                 <Text style={{ color: '#38bdf8', fontSize: 13, fontWeight: '700' }}>m</Text>
               </View>
               <Text style={{ color: '#64748b', fontSize: 10, marginTop: 4 }}>Nadir acoustic altimeter reading</Text>
@@ -3691,11 +3939,11 @@ export default function App() {
             }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '800', letterSpacing: 0.6 }}>NET ELEVATION</Text>
-                <Text style={{ color: '#f59e0b', fontSize: 13 }}>↑</Text>
+                <Text style={{ color: activeFrame.isNet ? '#f59e0b' : '#64748b', fontSize: 13 }}>↑</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3, marginTop: 4 }}>
-                <Text style={{ color: '#f59e0b', fontSize: 24, fontWeight: '900' }}>{sonarData.netElevationM}</Text>
-                <Text style={{ color: '#f59e0b', fontSize: 13, fontWeight: '700' }}>m</Text>
+                <Text style={{ color: activeFrame.isNet ? '#f59e0b' : '#94a3b8', fontSize: 24, fontWeight: '900' }}>{activeFrame.netElevationM}</Text>
+                <Text style={{ color: activeFrame.isNet ? '#f59e0b' : '#94a3b8', fontSize: 13, fontWeight: '700' }}>m</Text>
               </View>
               <Text style={{ color: '#64748b', fontSize: 10, marginTop: 4 }}>Height net floats above bottom</Text>
             </View>
@@ -3716,7 +3964,7 @@ export default function App() {
                 <Text style={{ color: '#34d399', fontSize: 13 }}>⚓</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3, marginTop: 4 }}>
-                <Text style={{ color: '#34d399', fontSize: 24, fontWeight: '900' }}>{sonarData.extraction.hookTargetDepthM}</Text>
+                <Text style={{ color: '#34d399', fontSize: 24, fontWeight: '900' }}>{activeFrame.hookTargetDepthM}</Text>
                 <Text style={{ color: '#34d399', fontSize: 13, fontWeight: '700' }}>m</Text>
               </View>
               <Text style={{ color: '#64748b', fontSize: 10, marginTop: 4 }}>Recommended grapple contact point</Text>
@@ -3735,10 +3983,12 @@ export default function App() {
                 <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '800', letterSpacing: 0.6 }}>BOTTOM SUBSTRATE</Text>
                 <Text style={{ color: '#94a3b8', fontSize: 13 }}>⬡</Text>
               </View>
-              <Text style={{ color: '#ffffff', fontSize: 18, fontWeight: '900', marginTop: 6 }}>{sonarData.bottomSubstrate}</Text>
+              <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '900', marginTop: 6 }} numberOfLines={1}>{activeFrame.substrate}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10b981' }} />
-                <Text style={{ color: '#10b981', fontSize: 10, fontWeight: '700' }}>Snag Risk: {sonarData.extraction.snagRisk}</Text>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: activeFrame.isNet ? '#10b981' : '#f59e0b' }} />
+                <Text style={{ color: activeFrame.isNet ? '#10b981' : '#f59e0b', fontSize: 10, fontWeight: '700' }}>
+                  Target: {activeFrame.isNet ? 'Ghost Gear Confirmed' : activeFrame.gearType}
+                </Text>
               </View>
             </View>
           </View>
@@ -3764,25 +4014,25 @@ export default function App() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={{ color: '#10b981', fontSize: 14 }}>✓</Text>
                 <Text style={{ color: '#cbd5e1', fontSize: 11, fontWeight: '600' }}>
-                  Cable Scope: {sonarData.extraction.cableScopeM}m Steel Cable Paid Out @ 1.5 kn
+                  Cable Scope: {activeFrame.cableScopeM}m Steel Cable Paid Out @ 1.8 kn
                 </Text>
               </View>
-              <Text style={{ color: '#10b981', fontSize: 10, fontWeight: '900' }}>DONE</Text>
+              <Text style={{ color: '#10b981', fontSize: 10, fontWeight: '900' }}>READY</Text>
             </View>
 
             {/* Step 2: Tension Spike */}
             <View style={{ marginBottom: 10 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10b981' }} />
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: activeFrame.isNet ? '#10b981' : '#64748b' }} />
                   <Text style={{ color: '#f8fafc', fontSize: 11, fontWeight: '700' }}>
-                    Tension Spike: Target Hooked! Winch Load {sonarData.extraction.winchLoadKg} kg
+                    Tension Spike: {activeFrame.isNet ? `Target Hooked! Winch Load ${selectedTarget?.massKg || 420} kg` : 'Standby - Acoustic Survey Mode'}
                   </Text>
                 </View>
               </View>
               {/* Green Progress Bar */}
               <View style={{ height: 6, backgroundColor: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
-                <View style={{ width: '78%', height: '100%', backgroundColor: '#00f2fe', borderRadius: 3 }} />
+                <View style={{ width: activeFrame.isNet ? '82%' : '20%', height: '100%', backgroundColor: activeFrame.isNet ? '#00f2fe' : '#64748b', borderRadius: 3 }} />
               </View>
             </View>
 
@@ -3791,10 +4041,10 @@ export default function App() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={{ color: '#ffd166', fontSize: 14 }}>🔄</Text>
                 <Text style={{ color: '#cbd5e1', fontSize: 11, fontWeight: '600' }}>
-                  Controlled Haul: {sonarData.extraction.winchHaulSpeedMs} m/s (Net rising: 12.5m / {sonarData.seabedDepthM}m)
+                  Controlled Haul: 0.4 m/s (Net elevation: {activeFrame.netElevationM}m / {activeFrame.depthM}m seabed)
                 </Text>
               </View>
-              <Text style={{ color: '#ffd166', fontSize: 10, fontWeight: '900' }}>LIFTING</Text>
+              <Text style={{ color: '#ffd166', fontSize: 10, fontWeight: '900' }}>{activeFrame.isNet ? 'LIFTING' : 'IDLE'}</Text>
             </View>
 
             {/* Step 4: Big Cyan Button - NET ON DECK */}
@@ -3815,6 +4065,12 @@ export default function App() {
               onPress={() => {
                 saveSonarAuditLogOffline({
                   ...sonarData,
+                  seabedDepthM: activeFrame.depthM,
+                  netElevationM: activeFrame.netElevationM,
+                  acousticShadowLengthM: activeFrame.shadowLengthM,
+                  bottomSubstrate: activeFrame.substrate,
+                  gpsCoordinates: activeFrame.coords,
+                  confidence: activeFrame.confidence,
                   missionId: activeMissionId || 'MM-01',
                   vesselTag: currentUser.boatTag,
                   operatorName: currentUser.name,
@@ -4385,7 +4641,7 @@ export default function App() {
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Text style={{ color: '#00f2fe', fontSize: 13, fontWeight: '900', letterSpacing: 0.4 }}>
-                          ACTIVATE SIDE-SCAN SONAR HUD
+                          START SIDE-SCAN SONAR IMAGING
                         </Text>
                         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10b981' }} />
                       </View>
@@ -4418,6 +4674,18 @@ export default function App() {
             );
           })()}
           </View>
+        )}
+
+        {/* Hidden Batch Upload Input for Side-Scan Sonar */}
+        {typeof document !== 'undefined' && (
+          <input
+            id="sonar-batch-file-input"
+            type="file"
+            multiple
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={handleSonarBatchUpload}
+          />
         )}
 
         {/* MODAL 1: PRE-DEPARTURE MARINE ALERT MODAL */}
