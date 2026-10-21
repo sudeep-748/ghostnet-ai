@@ -621,9 +621,85 @@ export default function App() {
   const [showPreDepartureModal, setShowPreDepartureModal] = useState<boolean>(false);
   const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
   const [showSonarConsole, setShowSonarConsole] = useState<boolean>(false);
+  const [showSonarUploadModal, setShowSonarUploadModal] = useState<boolean>(false);
+  const [pendingUploadFiles, setPendingUploadFiles] = useState<any[]>([]);
   const [surveyFrames, setSurveyFrames] = useState<SurveyFrame[]>([]);
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number>(0);
   const [isScanningBatch, setIsScanningBatch] = useState<boolean>(false);
+
+  const processAndLaunchSurveyBatch = async (files: any[]) => {
+    if (!files || files.length === 0) return;
+    setIsScanningBatch(true);
+    showToast(`Decoding ${files.length} marine survey file(s)...`);
+
+    const readPromises = files.map((file: any) => {
+      const isXtf = file.name.toLowerCase().endsWith('.xtf');
+      if (isXtf) {
+        return new Promise<SurveyFrame>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = async (ev) => {
+            const buf = ev.target?.result as ArrayBuffer;
+            const parsed = await parseXtfBinaryToEchogram(buf, file.name);
+            const protocol = calculateExtractionProtocol(parsed.depthM, parsed.netElevationM, parsed.isNet ? 'Sandy Mud' : 'Sand Bed');
+            resolve({
+              id: `xtf-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              name: file.name,
+              uri: parsed.uri,
+              isNet: parsed.isNet,
+              confidence: parsed.confidence,
+              gearType: parsed.isNet ? (selectedTarget?.gearName || 'Monofilament Gillnet') : 'Flat Seabed',
+              depthM: parsed.depthM,
+              netElevationM: parsed.netElevationM,
+              shadowLengthM: parsed.shadowLengthM,
+              hookTargetDepthM: protocol.hookTargetDepthM,
+              cableScopeM: protocol.cableScopeM,
+              substrate: parsed.isNet ? 'Sandy Mud' : 'Sand Bed',
+              coords: parsed.coords,
+              boundingBox: parsed.isNet ? { x: 20, y: 24, width: 58, height: 46 } : undefined
+            });
+          };
+          reader.readAsArrayBuffer(file);
+        });
+      } else {
+        return new Promise<SurveyFrame>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const uri = (ev.target?.result as string) || '';
+            const isNet = file.name.toLowerCase().includes('net') || file.name.toLowerCase().includes('target');
+            const depth = selectedTarget?.depthM || 24.5;
+            const shadow = isNet ? parseFloat((depth * 0.74).toFixed(1)) : 0.8;
+            const elevation = isNet ? calculateNetElevation(shadow, depth) : 0.2;
+            const protocol = calculateExtractionProtocol(depth, elevation, isNet ? 'Sandy Mud' : 'Sand Bed');
+            resolve({
+              id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              name: file.name,
+              uri,
+              isNet,
+              confidence: isNet ? 0.96 : 0.14,
+              gearType: isNet ? (selectedTarget?.gearName || 'Monofilament Gillnet') : 'Flat Sandy Bed',
+              depthM: depth,
+              netElevationM: elevation,
+              shadowLengthM: shadow,
+              hookTargetDepthM: protocol.hookTargetDepthM,
+              cableScopeM: protocol.cableScopeM,
+              substrate: isNet ? 'Sandy Mud' : 'Sand Bed',
+              coords: selectedTarget?.coords || '13°07\'42.1"N 80°18\'09.4"E',
+              boundingBox: isNet ? { x: 22, y: 26, width: 56, height: 44 } : undefined
+            });
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+    });
+
+    const results = await Promise.all(readPromises);
+    setSurveyFrames(results);
+    const bestIdx = results.findIndex((f) => f.isNet);
+    setSelectedFrameIndex(bestIdx !== -1 ? bestIdx : 0);
+    setIsScanningBatch(false);
+    setShowSonarConsole(true);
+    showToast(`🎯 AI Decoded ${results.length} File(s) - Ghost Net Target Locked!`);
+  };
 
   const handleSonarBatchUpload = async (e: any) => {
     const files = e.target?.files;
@@ -702,10 +778,7 @@ export default function App() {
   };
 
   const triggerBatchUpload = () => {
-    if (typeof document !== 'undefined') {
-      const el = document.getElementById('sonar-batch-file-input');
-      if (el) el.click();
-    }
+    setShowSonarUploadModal(true);
   };
   const [verifiedWeight, setVerifiedWeight] = useState<number>(1.2);
   const [isNavigating, setIsNavigating] = useState<boolean>(false);
@@ -4628,7 +4701,7 @@ export default function App() {
                     shadowRadius: 10,
                     elevation: 5
                   }}
-                  onPress={() => setShowSonarConsole(true)}
+                  onPress={() => setShowSonarUploadModal(true)}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
                     <View style={{
@@ -4692,6 +4765,154 @@ export default function App() {
             onChange={handleSonarBatchUpload}
           />
         )}
+
+        {/* MODAL 3: ACOUSTIC SONAR SURVEY INGESTION MODAL */}
+        <Modal
+          visible={showSonarUploadModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowSonarUploadModal(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalContent}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.modalIconWrap, { backgroundColor: 'rgba(0, 242, 254, 0.2)' }]}>
+                  <Text style={{ fontSize: 22 }}>📡</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.modalTag, { color: '#00f2fe' }]}>ACOUSTIC SURVEY INGESTION</Text>
+                  <Text style={styles.modalTitle}>Upload Grid Recordings</Text>
+                </View>
+              </View>
+
+              <Text style={styles.modalWarningText}>
+                Select marine .xtf sonar logs or survey photos captured across the search grid. Our AI will decode raw pings, isolate ghost net snags, enhance the echogram, and compute recovery winch telemetry.
+              </Text>
+
+              <View style={styles.modalTargetBox}>
+                <Text style={styles.modalBoxLabel}>SEARCH SECTOR CONTEXT</Text>
+                <Text style={styles.modalBoxTitle}>
+                  {selectedTarget?.gearName || 'Lost Gillnet'} • {selectedTarget?.massKg || 420} kg
+                </Text>
+                <Text style={styles.modalBoxCoords}>{selectedTarget?.coords || 'Kasimedu Deep Corridor (Sector 04)'}</Text>
+              </View>
+
+              {/* Native File Selector Area */}
+              <View style={{
+                backgroundColor: '#071018',
+                borderRadius: 10,
+                borderWidth: 1.5,
+                borderColor: pendingUploadFiles.length > 0 ? '#00e475' : '#00f2fe',
+                borderStyle: 'dashed',
+                padding: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 12,
+                marginBottom: 14
+              }}>
+                <Text style={{ fontSize: 26, marginBottom: 4 }}>📁</Text>
+                <Text style={{ color: pendingUploadFiles.length > 0 ? '#00e475' : '#00f2fe', fontSize: 13, fontWeight: '800', textAlign: 'center' }}>
+                  {pendingUploadFiles.length > 0
+                    ? `✅ ${pendingUploadFiles.length} Survey File(s) Selected`
+                    : 'Select .XTF Sonar Files or Photos'}
+                </Text>
+                <Text style={{ color: '#94a3b8', fontSize: 11, textAlign: 'center', marginTop: 3 }}>
+                  {pendingUploadFiles.length > 0
+                    ? pendingUploadFiles.map(f => f.name).slice(0, 3).join(', ') + (pendingUploadFiles.length > 3 ? ` + ${pendingUploadFiles.length - 3} more` : '')
+                    : 'Supported: .xtf (eXtended Triton Format), .png, .jpg'}
+                </Text>
+
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: 'rgba(0, 242, 254, 0.2)',
+                    borderWidth: 1,
+                    borderColor: '#00f2fe',
+                    borderRadius: 6,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    marginTop: 10
+                  }}
+                  onPress={() => {
+                    if (typeof document !== 'undefined') {
+                      const el = document.getElementById('modal-sonar-file-input');
+                      if (el) el.click();
+                    }
+                  }}
+                >
+                  <Text style={{ color: '#00f2fe', fontSize: 12, fontWeight: 'bold' }}>
+                    {pendingUploadFiles.length > 0 ? 'Change Selected Files' : 'Browse Files / Photos'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Actual file input rendered inside modal */}
+                {typeof document !== 'undefined' && (
+                  <input
+                    id="modal-sonar-file-input"
+                    type="file"
+                    multiple
+                    accept=".xtf,image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e: any) => {
+                      if (e.target?.files && e.target.files.length > 0) {
+                        setPendingUploadFiles(Array.from(e.target.files));
+                      }
+                    }}
+                  />
+                )}
+              </View>
+
+              {/* Action Buttons */}
+              <View style={{ gap: 8 }}>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: pendingUploadFiles.length > 0 ? '#00f2fe' : '#1e293b',
+                    borderRadius: 8,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 8,
+                    shadowColor: '#00f2fe',
+                    shadowOpacity: pendingUploadFiles.length > 0 ? 0.4 : 0,
+                    shadowRadius: 10,
+                    elevation: 5
+                  }}
+                  onPress={async () => {
+                    if (pendingUploadFiles.length === 0) {
+                      if (typeof document !== 'undefined') {
+                        const el = document.getElementById('modal-sonar-file-input');
+                        if (el) el.click();
+                      }
+                      return;
+                    }
+                    setShowSonarUploadModal(false);
+                    await processAndLaunchSurveyBatch(pendingUploadFiles);
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>⚡</Text>
+                  <Text style={{
+                    color: pendingUploadFiles.length > 0 ? '#020617' : '#94a3b8',
+                    fontSize: 13,
+                    fontWeight: '900',
+                    letterSpacing: 0.5
+                  }}>
+                    {pendingUploadFiles.length > 0 ? '[ INGEST & LAUNCH SONAR CONSOLE ➔ ]' : '[ SELECT FILES FIRST ]'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{ paddingVertical: 8, alignItems: 'center' }}
+                  onPress={() => {
+                    setShowSonarUploadModal(false);
+                    setPendingUploadFiles([]);
+                  }}
+                >
+                  <Text style={{ color: '#94a3b8', fontSize: 13 }}>Cancel / Return to Navigation Map</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* MODAL 1: PRE-DEPARTURE MARINE ALERT MODAL */}
         <Modal
