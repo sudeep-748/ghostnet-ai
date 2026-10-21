@@ -3,3 +3,5 @@ node_modules/
 __pycache__/
 *.pyc
 .env
+sample_sonar_images/
+mobile/dist/sample_sonar_images/
