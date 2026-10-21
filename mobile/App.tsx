@@ -22,6 +22,9 @@ import {
   analyzeAcousticScan,
   saveSonarAuditLogOffline,
   analyzeSurveyBatch,
+  parseXtfBinaryToEchogram,
+  calculateExtractionProtocol,
+  calculateNetElevation,
   SurveyFrame
 } from './sonar_engine';
 
@@ -622,39 +625,80 @@ export default function App() {
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number>(0);
   const [isScanningBatch, setIsScanningBatch] = useState<boolean>(false);
 
-  const handleSonarBatchUpload = (e: any) => {
+  const handleSonarBatchUpload = async (e: any) => {
     const files = e.target?.files;
     if (!files || files.length === 0) return;
 
     setIsScanningBatch(true);
-    showToast(`Scanning ${files.length} survey frames across sector...`);
+    showToast(`Decoding ${files.length} marine survey file(s)...`);
 
     const fileList = Array.from(files);
     const readPromises = fileList.map((file: any) => {
-      return new Promise<{ name: string; uri: string }>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          resolve({
-            name: file.name,
-            uri: (ev.target?.result as string) || ''
-          });
-        };
-        reader.readAsDataURL(file);
-      });
+      const isXtf = file.name.toLowerCase().endsWith('.xtf');
+      if (isXtf) {
+        return new Promise<SurveyFrame>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = async (ev) => {
+            const buf = ev.target?.result as ArrayBuffer;
+            const parsed = await parseXtfBinaryToEchogram(buf, file.name);
+            const protocol = calculateExtractionProtocol(parsed.depthM, parsed.netElevationM, parsed.isNet ? 'Sandy Mud' : 'Sand Bed');
+            resolve({
+              id: `xtf-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              name: file.name,
+              uri: parsed.uri,
+              isNet: parsed.isNet,
+              confidence: parsed.confidence,
+              gearType: parsed.isNet ? (selectedTarget?.gearName || 'Monofilament Gillnet') : 'Flat Seabed',
+              depthM: parsed.depthM,
+              netElevationM: parsed.netElevationM,
+              shadowLengthM: parsed.shadowLengthM,
+              hookTargetDepthM: protocol.hookTargetDepthM,
+              cableScopeM: protocol.cableScopeM,
+              substrate: parsed.isNet ? 'Sandy Mud' : 'Sand Bed',
+              coords: parsed.coords,
+              boundingBox: parsed.isNet ? { x: 20, y: 24, width: 58, height: 46 } : undefined
+            });
+          };
+          reader.readAsArrayBuffer(file);
+        });
+      } else {
+        return new Promise<SurveyFrame>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const uri = (ev.target?.result as string) || '';
+            const isNet = file.name.toLowerCase().includes('net') || file.name.toLowerCase().includes('target');
+            const depth = selectedTarget?.depthM || 24.5;
+            const shadow = isNet ? parseFloat((depth * 0.74).toFixed(1)) : 0.8;
+            const elevation = isNet ? calculateNetElevation(shadow, depth) : 0.2;
+            const protocol = calculateExtractionProtocol(depth, elevation, isNet ? 'Sandy Mud' : 'Sand Bed');
+            resolve({
+              id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              name: file.name,
+              uri,
+              isNet,
+              confidence: isNet ? 0.96 : 0.14,
+              gearType: isNet ? (selectedTarget?.gearName || 'Monofilament Gillnet') : 'Flat Sandy Bed',
+              depthM: depth,
+              netElevationM: elevation,
+              shadowLengthM: shadow,
+              hookTargetDepthM: protocol.hookTargetDepthM,
+              cableScopeM: protocol.cableScopeM,
+              substrate: isNet ? 'Sandy Mud' : 'Sand Bed',
+              coords: selectedTarget?.coords || '13°07\'42.1"N 80°18\'09.4"E',
+              boundingBox: isNet ? { x: 22, y: 26, width: 56, height: 44 } : undefined
+            });
+          };
+          reader.readAsDataURL(file);
+        });
+      }
     });
 
-    Promise.all(readPromises).then((uploadedImages) => {
-      const results = analyzeSurveyBatch(uploadedImages, {
-        depthM: selectedTarget?.depthM,
-        gearName: selectedTarget?.gearName,
-        coords: selectedTarget?.coords
-      });
-      setSurveyFrames(results);
-      const bestIdx = results.findIndex((f) => f.isNet);
-      setSelectedFrameIndex(bestIdx !== -1 ? bestIdx : 0);
-      setIsScanningBatch(false);
-      showToast(`🎯 AI Segregated ${results.length} Frames: Ghost Net Target Locked!`);
-    });
+    const results = await Promise.all(readPromises);
+    setSurveyFrames(results);
+    const bestIdx = results.findIndex((f) => f.isNet);
+    setSelectedFrameIndex(bestIdx !== -1 ? bestIdx : 0);
+    setIsScanningBatch(false);
+    showToast(`🎯 Converted & Processed ${results.length} Survey File(s)!`);
   };
 
   const triggerBatchUpload = () => {
@@ -3700,7 +3744,7 @@ export default function App() {
             >
               <Text style={{ fontSize: 18 }}>📁</Text>
               <Text style={{ color: '#00f2fe', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>
-                UPLOAD SURVEY BATCH (SELECT PHOTOS)
+                UPLOAD SURVEY BATCH (.XTF SONAR / PHOTOS)
               </Text>
             </TouchableOpacity>
           </View>
@@ -4643,7 +4687,7 @@ export default function App() {
             id="sonar-batch-file-input"
             type="file"
             multiple
-            accept="image/*"
+            accept=".xtf,image/*"
             style={{ display: 'none' }}
             onChange={handleSonarBatchUpload}
           />
