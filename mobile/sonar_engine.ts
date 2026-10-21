@@ -184,54 +184,6 @@ export interface SurveyFrame {
 }
 
 /**
- * Creates dynamic acoustic SVG echograms for demo survey frames (Sand, Rock, Net)
- */
-function createSyntheticEchogram(type: 'SAND' | 'ROCK' | 'NET', frameNum: number): string {
-  if (type === 'NET') {
-    return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" width="100%" height="100%">
-      <defs>
-        <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#020617"/><stop offset="50%" stop-color="#0b1726"/><stop offset="100%" stop-color="#020617"/></linearGradient>
-        <radialGradient id="net" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffffff"/><stop offset="40%" stop-color="#00f2fe"/><stop offset="80%" stop-color="#0369a1"/><stop offset="100%" stop-color="transparent"/></radialGradient>
-      </defs>
-      <rect width="320" height="200" fill="url(#bg)"/>
-      <line x1="160" y1="0" x2="160" y2="200" stroke="#334155" stroke-dasharray="4,4" stroke-width="1"/>
-      <path d="M 0,105 Q 80,100 160,105 T 320,104" stroke="#64748b" stroke-width="1.5" fill="none" opacity="0.6"/>
-      <!-- Ghost Net Cluster Echo -->
-      <ellipse cx="110" cy="118" rx="28" ry="16" fill="url(#net)"/>
-      <circle cx="116" cy="114" r="8" fill="#ffffff" opacity="0.9"/>
-      <!-- Acoustic Shadow -->
-      <path d="M 110,126 L 150,175 L 75,175 Z" fill="#000000" opacity="0.95"/>
-      <text x="12" y="24" fill="#00f2fe" font-size="10" font-family="monospace" font-weight="bold">#${frameNum} 455kHz • NET CONTACT LOCKED</text>
-      <rect x="76" y="98" width="68" height="42" fill="none" stroke="#00f2fe" stroke-width="1.5" stroke-dasharray="3,3"/>
-    </svg>`);
-  }
-  if (type === 'ROCK') {
-    return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" width="100%" height="100%">
-      <defs>
-        <linearGradient id="bgr" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#020617"/><stop offset="50%" stop-color="#0f172a"/><stop offset="100%" stop-color="#020617"/></linearGradient>
-      </defs>
-      <rect width="320" height="200" fill="url(#bgr)"/>
-      <line x1="160" y1="0" x2="160" y2="200" stroke="#334155" stroke-dasharray="4,4" stroke-width="1"/>
-      <path d="M 0,110 Q 70,118 160,110 T 320,112" stroke="#64748b" stroke-width="1.5" fill="none" opacity="0.5"/>
-      <!-- Rock Outcrop -->
-      <polygon points="120,115 138,98 152,116" fill="#f59e0b" opacity="0.75"/>
-      <polygon points="138,116 160,140 128,140" fill="#020617" opacity="0.9"/>
-      <text x="12" y="24" fill="#f59e0b" font-size="10" font-family="monospace" font-weight="bold">#${frameNum} 455kHz • ROCK OUTCROP</text>
-    </svg>`);
-  }
-  // Sand
-  return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" width="100%" height="100%">
-    <defs>
-      <linearGradient id="bgs" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#020617"/><stop offset="50%" stop-color="#09131f"/><stop offset="100%" stop-color="#020617"/></linearGradient>
-    </defs>
-    <rect width="320" height="200" fill="url(#bgs)"/>
-    <line x1="160" y1="0" x2="160" y2="200" stroke="#1e293b" stroke-dasharray="4,4" stroke-width="1"/>
-    <path d="M 0,108 Q 90,105 160,108 T 320,107" stroke="#475569" stroke-width="1" fill="none" opacity="0.4"/>
-    <text x="12" y="24" fill="#64748b" font-size="10" font-family="monospace">#${frameNum} 455kHz • FLAT SEABED</text>
-  </svg>`);
-}
-
-/**
  * Analyzes a batch of uploaded survey images.
  * Determines acoustic target probability, filters out flat seabed and rock formations,
  * and auto-selects the best ghost net candidate with highest confidence.

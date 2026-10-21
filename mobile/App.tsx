@@ -22,7 +22,6 @@ import {
   analyzeAcousticScan,
   saveSonarAuditLogOffline,
   analyzeSurveyBatch,
-  generateDemo10Batch,
   SurveyFrame
 } from './sonar_engine';
 
@@ -656,23 +655,6 @@ export default function App() {
       setIsScanningBatch(false);
       showToast(`🎯 AI Segregated ${results.length} Frames: Ghost Net Target Locked!`);
     });
-  };
-
-  const handleLoadDemo10Batch = () => {
-    setIsScanningBatch(true);
-    showToast('Loading 10-Frame Sector 4 survey grid...');
-    setTimeout(() => {
-      const results = generateDemo10Batch('', {
-        depthM: selectedTarget?.depthM,
-        gearName: selectedTarget?.gearName,
-        coords: selectedTarget?.coords
-      });
-      setSurveyFrames(results);
-      const bestIdx = results.findIndex((f) => f.isNet);
-      setSelectedFrameIndex(bestIdx !== -1 ? bestIdx : 4);
-      setIsScanningBatch(false);
-      showToast('🎯 Sector 4 Survey: Net Target Locked on Frame #5 (96%)!');
-    }, 450);
   };
 
   const triggerBatchUpload = () => {
@@ -3700,46 +3682,25 @@ export default function App() {
           </Text>
 
           {/* Survey Batch Actions Bar */}
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+          <View style={{ marginBottom: 12 }}>
             <TouchableOpacity
               style={{
-                flex: 1,
+                width: '100%',
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 6,
+                gap: 8,
                 backgroundColor: 'rgba(0, 242, 254, 0.12)',
                 borderWidth: 1.5,
                 borderColor: '#00f2fe',
                 borderRadius: 8,
-                paddingVertical: 10
+                paddingVertical: 12
               }}
               onPress={triggerBatchUpload}
             >
-              <Text style={{ fontSize: 15 }}>📁</Text>
-              <Text style={{ color: '#00f2fe', fontSize: 11, fontWeight: '900', letterSpacing: 0.4 }}>
-                UPLOAD SURVEY BATCH
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                borderWidth: 1,
-                borderColor: '#10b981',
-                borderRadius: 8,
-                paddingHorizontal: 12,
-                paddingVertical: 10
-              }}
-              onPress={handleLoadDemo10Batch}
-            >
-              <Text style={{ fontSize: 14 }}>⚡</Text>
-              <Text style={{ color: '#6ee7b7', fontSize: 11, fontWeight: '800' }}>
-                DEMO 10 FRAMES
+              <Text style={{ fontSize: 18 }}>📁</Text>
+              <Text style={{ color: '#00f2fe', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>
+                UPLOAD SURVEY BATCH (SELECT PHOTOS)
               </Text>
             </TouchableOpacity>
           </View>
