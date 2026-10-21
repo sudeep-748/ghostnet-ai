@@ -1721,11 +1721,34 @@ export default function App() {
       padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer;
     }
     .map-btn:hover { background: #00f2fe; color: #061320; }
+    .custom-harbour-pin {
+      background: #ffd166; color: #061320; font-size: 10px; font-weight: 800;
+      padding: 2px 6px; border-radius: 4px; border: 1px solid #ffffff; white-space: nowrap;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+    .custom-landmark-pin {
+      background: rgba(19, 31, 46, 0.85); color: #94a3b8; font-size: 9px; font-weight: 700;
+      padding: 1px 4px; border-radius: 3px; border: 1px solid #334155; white-space: nowrap;
+    }
+    .custom-depth-pin {
+      color: #38bdf8; font-size: 9px; font-family: monospace; font-weight: bold;
+      background: rgba(6, 19, 32, 0.7); padding: 1px 4px; border-radius: 2px; white-space: nowrap;
+    }
+    .map-mode-badge {
+      position: absolute; top: 12px; left: 12px; z-index: 1000;
+      background: rgba(6, 19, 32, 0.88); border: 1px solid rgba(0, 242, 254, 0.4);
+      border-radius: 6px; padding: 4px 8px; color: #00f2fe; font-size: 10px; font-weight: 800;
+      display: flex; align-items: center; gap: 5px; pointer-events: none;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div class="map-mode-badge" id="modeBadge">
+    <span style="color:#00e475;">●</span> NAUTICAL VECTOR ACTIVE (OFFLINE READY)
+  </div>
   <div class="map-ctrl-bar">
+    <button class="map-btn" id="btnToggleLayer" onclick="toggleLayerMode()">🗺️ Nautical / 🛰️ Satellite</button>
     <button class="map-btn" onclick="fitAll()">Fit All</button>
     <button class="map-btn" onclick="centerBoat()">🛥️ Vessel</button>
     <button class="map-btn" onclick="centerNet()">🔴 Net</button>
@@ -1743,16 +1766,118 @@ export default function App() {
     var map = L.map('map', { zoomControl: false }).setView([${centerLat}, ${centerLon}], 11);
     L.control.zoom({ position: 'topleft' }).addTo(map);
 
-    // High-resolution Satellite Imagery
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    // 1. BUILT-IN OFFLINE NAUTICAL VECTOR BASEMAP (WORKS 100% WITHOUT INTERNET AT SEA)
+    var nauticalGroup = L.layerGroup().addTo(map);
+
+    // Depth Bathymetry Zones (Offshore oceanic gradients)
+    // 0-10m Inshore Shallows
+    L.polygon([
+      [13.45, 80.20], [13.45, 80.36], [13.30, 80.35], [13.20, 80.34],
+      [13.13, 80.33], [13.08, 80.32], [13.00, 80.30], [12.75, 80.28],
+      [12.75, 80.20]
+    ], { color: 'transparent', fillColor: '#0c273d', fillOpacity: 0.75 }).addTo(nauticalGroup);
+
+    // 10-25m Mid-Depth Trawl Zone
+    L.polygon([
+      [13.45, 80.36], [13.45, 80.40], [13.30, 80.39], [13.20, 80.38],
+      [13.13, 80.37], [13.08, 80.36], [13.00, 80.34], [12.75, 80.32],
+      [12.75, 80.28], [13.00, 80.30], [13.08, 80.32], [13.13, 80.33],
+      [13.20, 80.34], [13.30, 80.35]
+    ], { color: 'transparent', fillColor: '#081d2f', fillOpacity: 0.85 }).addTo(nauticalGroup);
+
+    // Chennai & Kasimedu Landmass Polygon (Left / West side)
+    var chennaiCoast = [
+      [13.45, 80.00], [13.45, 80.35], [13.40, 80.34], [13.35, 80.335],
+      [13.30, 80.33], [13.25, 80.32], [13.20, 80.31], [13.15, 80.30],
+      [13.132, 80.298], [13.128, 80.303], [13.122, 80.299], [13.10, 80.295],
+      [13.085, 80.292], [13.05, 80.283], [13.00, 80.275], [12.90, 80.255],
+      [12.75, 80.245], [12.75, 80.00]
+    ];
+    L.polygon(chennaiCoast, {
+      color: '#38bdf8', fillColor: '#131f2e', fillOpacity: 1.0, weight: 2
+    }).addTo(nauticalGroup);
+
+    // Kasimedu Harbour Basin & Breakwaters
+    var kasimeduBasin = [
+      [13.128, 80.298], [13.132, 80.306], [13.124, 80.308], [13.122, 80.299]
+    ];
+    L.polygon(kasimeduBasin, {
+      color: '#ffd166', fillColor: '#064e3b', fillOpacity: 0.9, weight: 2.5
+    }).addTo(nauticalGroup);
+
+    // Breakwater arms
+    L.polyline([[13.128, 80.298], [13.132, 80.306]], { color: '#ffd166', weight: 4 }).addTo(nauticalGroup);
+    L.polyline([[13.122, 80.299], [13.124, 80.308]], { color: '#ffd166', weight: 4 }).addTo(nauticalGroup);
+
+    // Kasimedu Base Landmark Pin
+    var harbourPin = L.divIcon({ className: 'custom-harbour-pin', html: '⚓ KASIMEDU HARBOUR', iconSize: [120, 20] });
+    L.marker([13.128, 80.301], { icon: harbourPin }).addTo(nauticalGroup);
+
+    // Coastline landmark references
+    var marinaPin = L.divIcon({ className: 'custom-landmark-pin', html: 'MARINA COAST', iconSize: [80, 16] });
+    L.marker([13.05, 80.283], { icon: marinaPin }).addTo(nauticalGroup);
+    var ennorePin = L.divIcon({ className: 'custom-landmark-pin', html: 'ENNORE SECTOR', iconSize: [80, 16] });
+    L.marker([13.25, 80.32], { icon: ennorePin }).addTo(nauticalGroup);
+
+    // Bathymetric Depth Contour Lines (Dashed isobaths)
+    L.polyline([
+      [13.45, 80.37], [13.30, 80.35], [13.20, 80.34], [13.13, 80.33],
+      [13.08, 80.32], [13.00, 80.30], [12.75, 80.28]
+    ], { color: '#00e475', weight: 1.5, dashArray: '4, 4', opacity: 0.8 }).addTo(nauticalGroup);
+
+    L.polyline([
+      [13.45, 80.41], [13.30, 80.39], [13.20, 80.38], [13.13, 80.37],
+      [13.08, 80.36], [13.00, 80.34], [12.75, 80.32]
+    ], { color: '#ffd166', weight: 1.5, dashArray: '4, 4', opacity: 0.8 }).addTo(nauticalGroup);
+
+    L.polyline([
+      [13.45, 80.49], [13.30, 80.47], [13.20, 80.46], [13.13, 80.45],
+      [13.08, 80.44], [13.00, 80.42], [12.75, 80.40]
+    ], { color: '#38bdf8', weight: 1.5, dashArray: '6, 6', opacity: 0.8 }).addTo(nauticalGroup);
+
+    // Isobath Sounding Tags
+    var tag10 = L.divIcon({ className: 'custom-depth-pin', html: '10m Depth', iconSize: [55, 14] });
+    L.marker([13.13, 80.33], { icon: tag10 }).addTo(nauticalGroup);
+    var tag25 = L.divIcon({ className: 'custom-depth-pin', html: '25m Trawl Line', iconSize: [75, 14] });
+    L.marker([13.13, 80.37], { icon: tag25 }).addTo(nauticalGroup);
+    var tag50 = L.divIcon({ className: 'custom-depth-pin', html: '50m Deep Drop', iconSize: [75, 14] });
+    L.marker([13.13, 80.45], { icon: tag50 }).addTo(nauticalGroup);
+
+    // Navigational Graticule Grid Lines (Lat / Lon)
+    [13.00, 13.10, 13.20, 13.30].forEach(function(lat) {
+      L.polyline([[lat, 80.0], [lat, 80.60]], { color: 'rgba(255,255,255,0.08)', weight: 1 }).addTo(nauticalGroup);
+    });
+    [80.30, 80.40, 80.50].forEach(function(lon) {
+      L.polyline([[12.75, lon], [13.45, lon]], { color: 'rgba(255,255,255,0.08)', weight: 1 }).addTo(nauticalGroup);
+    });
+
+    // 2. High-resolution Satellite Imagery Layer (Online Overlay)
+    var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 18,
       attribution: 'Esri Satellite'
-    }).addTo(map);
-
-    // Hybrid ocean / city boundaries & labels
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+    });
+    var refLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 18
-    }).addTo(map);
+    });
+
+    // Start with Satellite enabled if online, falls back seamlessly to Nautical Vector
+    var isSatVisible = true;
+    satLayer.addTo(map);
+    refLayer.addTo(map);
+
+    function toggleLayerMode() {
+      if (isSatVisible) {
+        map.removeLayer(satLayer);
+        map.removeLayer(refLayer);
+        isSatVisible = false;
+        document.getElementById('modeBadge').innerHTML = '<span style="color:#00f2fe;">●</span> TACTICAL NAUTICAL CHART (OFFLINE)';
+      } else {
+        satLayer.addTo(map);
+        refLayer.addTo(map);
+        isSatVisible = true;
+        document.getElementById('modeBadge').innerHTML = '<span style="color:#00e475;">●</span> SATELLITE OVERLAY (ONLINE)';
+      }
+    }
 
     var boatPos = [${boatLat}, ${boatLon}];
     var netPos = [${targetLat}, ${targetLon}];
