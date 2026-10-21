@@ -2056,7 +2056,7 @@ export default function App() {
     return generateMarineChartHtml(
       bLat,
       bLon,
-      currentUser ? currentUser.boatTag : 'Poseidon Alpha (MM-01)',
+      currentUser ? currentUser.boatTag : 'IND-TN-07-SP-0007',
       targetCoords.lat,
       targetCoords.lon,
       selectedTarget.gearName,
@@ -2064,7 +2064,7 @@ export default function App() {
       selectedTarget.depthM || 25,
       distNm
     );
-  }, [selectedTarget?.id]);
+  }, [selectedTarget?.id, crewTab]);
 
   // Live Device GPS / Satellite Fix Handler (Works completely offline via GNSS/NavIC hardware)
   const handleUpdateGps = () => {
@@ -2246,8 +2246,23 @@ export default function App() {
   };
 
   const handleStartMission = async (target: RescueTarget) => {
-    setSelectedTarget(target);
+    const activeTarget: RescueTarget = {
+      ...target,
+      isAssigned: true,
+      assignedTeam: currentUser?.name || currentUser?.username || 'Poseidon Alpha',
+      assignedBoat: currentUser?.boatTag || 'IND-TN-07-SP-0007'
+    };
+    setSelectedTarget(activeTarget);
     setShowPreDepartureModal(false);
+
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('ghostnet_selected_target', JSON.stringify(activeTarget));
+      }
+    } catch (e) {}
+
+    // Instantly update targets list in memory so Tab A reflects assignment without reload
+    setTargets((prev) => prev.map((t) => (t.id === target.id ? activeTarget : t)));
 
     // 1. Post to backend to record mission in recovery_missions table!
     try {
@@ -4152,6 +4167,7 @@ export default function App() {
               const isMyActiveMission = Boolean(
                 selectedTarget &&
                 (
+                  !selectedTarget.isAssigned ||
                   (selectedTarget.assignedTeam && (
                     selectedTarget.assignedTeam.toLowerCase().trim() === currentUser?.name?.toLowerCase().trim() ||
                     selectedTarget.assignedTeam.toLowerCase().trim() === currentUser?.username?.toLowerCase().trim()
@@ -4290,6 +4306,7 @@ export default function App() {
                         }}
                       >
                         {React.createElement('iframe', {
+                          key: `tactical-chart-${selectedTarget.id}`,
                           srcDoc: missionChartHtml,
                           style: {
                             width: '100%',
