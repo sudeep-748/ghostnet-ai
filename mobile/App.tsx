@@ -1742,7 +1742,9 @@ export default function App() {
     depthM: number,
     distNm: number,
     isConfirmedLock: boolean = false,
-    confirmedTarget?: any
+    confirmedTarget?: any,
+    confirmedLatNum?: number,
+    confirmedLonNum?: number
   ) => {
     // Member 1 Lagrangian drift trajectory points (+24h, +48h, +72h)
     const wp24Lat = targetLat + 0.024;
@@ -2052,21 +2054,9 @@ export default function App() {
                  '<b>Reported Gear:</b> ' + ${JSON.stringify(safeGear)} + '<br>' +
                  '<span style="color:#ffd166;font-weight:bold;">Initial Drop Coordinate</span>');
 
-    // Confirmed XTF coordinates inside 48h drift zone
-    var confirmedLat = netPos[0];
-    var confirmedLon = netPos[1];
-    var confirmedCoordsStr = ${JSON.stringify(confirmedTarget?.gpsCoordinates || '')};
-    if (confirmedCoordsStr) {
-      var cMatches = confirmedCoordsStr.match(/[-+]?[0-9]*\.?[0-9]+/g);
-      if (cMatches && cMatches.length >= 2) {
-        var parsedCLat = parseFloat(cMatches[0]);
-        var parsedCLon = parseFloat(cMatches[1]);
-        if (!isNaN(parsedCLat) && !isNaN(parsedCLon)) {
-          confirmedLat = parsedCLat;
-          confirmedLon = parsedCLon;
-        }
-      }
-    }
+    // Confirmed XTF coordinates inside 48h drift zone (passed dynamically as numbers)
+    var confirmedLat = ${typeof confirmedLatNum === 'number' && !isNaN(confirmedLatNum) ? confirmedLatNum : 'netPos[0]'};
+    var confirmedLon = ${typeof confirmedLonNum === 'number' && !isNaN(confirmedLonNum) ? confirmedLonNum : 'netPos[1]'};
     var confirmedPos = [confirmedLat, confirmedLon];
 
     if (isYoloConfirmed) {
@@ -2194,6 +2184,16 @@ export default function App() {
     const bLat = rescueCoords.lat;
     const bLon = rescueCoords.lon;
     const distNm = calculateDistanceNm(bLat, bLon, targetCoords.lat, targetCoords.lon);
+
+    // Dynamically extract confirmed latitude and longitude from the detected XTF target
+    let confLat = targetCoords.lat;
+    let confLon = targetCoords.lon;
+    if (detectedNetTarget && detectedNetTarget.gpsCoordinates) {
+      const parsedNet = parseCoordinates(detectedNetTarget.gpsCoordinates);
+      confLat = parsedNet.lat;
+      confLon = parsedNet.lon;
+    }
+
     return generateMarineChartHtml(
       bLat,
       bLon,
@@ -2205,7 +2205,9 @@ export default function App() {
       selectedTarget.depthM || 25,
       distNm,
       isNetMarkedOnMap,
-      detectedNetTarget
+      detectedNetTarget,
+      confLat,
+      confLon
     );
   }, [selectedTarget?.id, crewTab, isNetMarkedOnMap, detectedNetTarget]);
 

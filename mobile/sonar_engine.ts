@@ -75,7 +75,7 @@ export interface SonarAuditRecord {
 export function calculateNetElevation(
   shadowLengthM: number,
   seabedDepthM: number,
-  slantRangeM: number = 25.0
+  slantRangeM: number = 145.0
 ): number {
   if (slantRangeM + shadowLengthM <= 0) return 2.5;
   const rawElevation = (shadowLengthM * seabedDepthM) / (slantRangeM + shadowLengthM);
