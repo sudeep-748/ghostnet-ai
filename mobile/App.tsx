@@ -2040,32 +2040,60 @@ export default function App() {
                  '<b>Longitude:</b> ' + boatPos[1].toFixed(5) + '° E<br>' +
                  '<span style="color:#00f2fe;font-weight:700;">Live Operator Location (Moving)</span>');
 
-    // 2. Net Target Marker (0h Loss Point or Confirmed YOLOv8 Lock)
+    // 2. Net Target Markers (0h Loss Site + Confirmed YOLOv8 Lock at XTF Coordinates)
     var isYoloConfirmed = ${Boolean(isConfirmedLock)};
-    var netIcon = isYoloConfirmed
-      ? L.divIcon({ className: '', html: '<div class="custom-confirmed-marker">🎯</div>', iconSize: [34, 34], iconAnchor: [17, 17] })
-      : L.divIcon({ className: '', html: '<div class="custom-net-marker">🔴</div>', iconSize: [24, 24], iconAnchor: [12, 12] });
 
-    var netPopupContent = isYoloConfirmed
-      ? '<div style="min-width:190px;">' +
+    // Always render 0h Loss Site Pin (Red Marker)
+    var lossIcon = L.divIcon({ className: '', html: '<div class="custom-net-marker">🔴</div>', iconSize: [24, 24], iconAnchor: [12, 12] });
+    var lossMarker = L.marker(netPos, { icon: lossIcon }).addTo(map)
+      .bindPopup('<b>🔴 0h Fisherman Loss Site</b><br>' +
+                 '<b>Latitude:</b> ' + netPos[0].toFixed(5) + '° N<br>' +
+                 '<b>Longitude:</b> ' + netPos[1].toFixed(5) + '° E<br>' +
+                 '<b>Reported Gear:</b> ' + ${JSON.stringify(safeGear)} + '<br>' +
+                 '<span style="color:#ffd166;font-weight:bold;">Initial Drop Coordinate</span>');
+
+    // Confirmed XTF coordinates inside 48h drift zone
+    var confirmedLat = netPos[0];
+    var confirmedLon = netPos[1];
+    var confirmedCoordsStr = ${JSON.stringify(confirmedTarget?.gpsCoordinates || '')};
+    if (confirmedCoordsStr) {
+      var cMatches = confirmedCoordsStr.match(/[-+]?[0-9]*\.?[0-9]+/g);
+      if (cMatches && cMatches.length >= 2) {
+        var parsedCLat = parseFloat(cMatches[0]);
+        var parsedCLon = parseFloat(cMatches[1]);
+        if (!isNaN(parsedCLat) && !isNaN(parsedCLon)) {
+          confirmedLat = parsedCLat;
+          confirmedLon = parsedCLon;
+        }
+      }
+    }
+    var confirmedPos = [confirmedLat, confirmedLon];
+
+    if (isYoloConfirmed) {
+      var confirmedIcon = L.divIcon({
+        className: '',
+        html: '<div class="custom-confirmed-marker">🎯</div>',
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+      });
+
+      var confirmedPopup = '<div style="min-width:190px;">' +
         '<b style="color:#00e475;font-size:13px;">🎯 CONFIRMED GHOST NET LOCK</b><br>' +
         '<b>Model:</b> YOLOv8-Marine ALDFG (455kHz)<br>' +
         '<b>Confidence:</b> ' + ${JSON.stringify(confirmedTarget ? ((confirmedTarget.confidence || 0.96) * 100).toFixed(1) + '%' : '96.4%')} + '<br>' +
-        '<b>Latitude:</b> ' + netPos[0].toFixed(5) + '° N<br>' +
-        '<b>Longitude:</b> ' + netPos[1].toFixed(5) + '° E<br>' +
+        '<b>Decoded XTF Fix:</b> ' + confirmedLat.toFixed(5) + '° N, ' + confirmedLon.toFixed(5) + '° E<br>' +
         '<b>Seabed Depth:</b> ' + ${JSON.stringify(confirmedTarget ? confirmedTarget.seabedDepthM + ' m' : depthM + ' m')} + '<br>' +
-        '<b>Net Elevation:</b> ' + ${JSON.stringify(confirmedTarget ? confirmedTarget.netElevationM + ' m' : '3.4 m')} + '<br>' +
-        '<span style="color:#00e475;font-weight:bold;">Status: VESSEL INTERCEPTING TARGET</span>' +
-        '</div>'
-      : '<b>🔴 ' + ${JSON.stringify(safeGear)} + ' (0h Loss Site)</b><br>' +
-        '<b>Latitude:</b> ' + netPos[0].toFixed(5) + '° N<br>' +
-        '<b>Longitude:</b> ' + netPos[1].toFixed(5) + '° E<br>' +
-        '<b>Material:</b> ${material.toUpperCase()}<br>' +
-        '<b>Depth:</b> ${depthM}m';
+        '<b>Net Elevation:</b> ' + ${JSON.stringify(confirmedTarget ? confirmedTarget.netElevationM + ' m' : '4.7 m')} + '<br>' +
+        '<span style="color:#00e475;font-weight:bold;">Status: INSIDE 48-HOUR DRIFT CORRIDOR</span>' +
+        '</div>';
 
-    var netMarker = L.marker(netPos, { icon: netIcon }).addTo(map).bindPopup(netPopupContent);
-    if (isYoloConfirmed) {
-      setTimeout(function() { netMarker.openPopup(); }, 800);
+      var confirmedMarker = L.marker(confirmedPos, { icon: confirmedIcon }).addTo(map).bindPopup(confirmedPopup);
+      setTimeout(function() { confirmedMarker.openPopup(); }, 800);
+
+      // Dashed Underwater Migration Vector (0h Loss Point -> 48h Confirmed Lock)
+      L.polyline([netPos, confirmedPos], {
+        color: '#ffd166', weight: 2.5, dashArray: '4, 6', opacity: 0.9
+      }).addTo(map);
     }
 
     // 3. Member 1 AI Drift Waypoint Markers (+24h, +48h, +72h) with exact coordinates in popups
@@ -2110,12 +2138,13 @@ export default function App() {
       color: '#00e475', weight: 3, dashArray: '6, 6', opacity: 0.9
     }).addTo(map);
 
-    // 5. Course Intercept Vector Line (Boat -> 0h Net)
-    var courseLine = L.polyline([boatPos, netPos], {
+    // 5. Course Intercept Vector Line (Boat -> Confirmed Net Lock or 0h Net)
+    var activeTargetPos = isYoloConfirmed ? confirmedPos : netPos;
+    var courseLine = L.polyline([boatPos, activeTargetPos], {
       color: '#00f2fe', weight: 2.5, dashArray: '8, 8', opacity: 0.95
     }).addTo(map);
 
-    var allPoints = [boatPos, netPos, wp24Pos, wp48Pos, wp72Pos];
+    var allPoints = [boatPos, netPos, confirmedPos, wp24Pos, wp48Pos, wp72Pos];
     var bounds = L.latLngBounds(allPoints);
     setTimeout(function() {
       map.invalidateSize();
@@ -4595,7 +4624,7 @@ export default function App() {
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#00e475' }} />
                               <Text style={{ color: '#00e475', fontSize: 12, fontWeight: '900', letterSpacing: 0.5, fontFamily: 'monospace' }}>
-                                🎯 CONFIRMED GHOST NET LOCK • YOLOv8 INFERENCE
+                                🎯 CONFIRMED GHOST NET LOCK • YOLOv8
                               </Text>
                             </View>
                             <View style={{ backgroundColor: 'rgba(0, 228, 117, 0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#00e475' }}>
@@ -4616,11 +4645,11 @@ export default function App() {
                           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                             <View style={{ flex: 1, backgroundColor: '#07121e', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#1e3a5f' }}>
                               <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '800' }}>RANGE TO NET</Text>
-                              <Text style={{ color: boatApproachDistanceM <= 30 ? '#00e475' : '#00f2fe', fontSize: 18, fontWeight: '900', marginTop: 2 }}>
+                              <Text style={{ color: '#00e475', fontSize: 18, fontWeight: '900', marginTop: 2 }}>
                                 {boatApproachDistanceM} m
                               </Text>
-                              <Text style={{ color: boatApproachDistanceM <= 30 ? '#00e475' : '#64748b', fontSize: 9, marginTop: 2 }}>
-                                {boatApproachDistanceM <= 30 ? '● In Grapple Zone' : 'Closing Range'}
+                              <Text style={{ color: '#64748b', fontSize: 9, marginTop: 2 }}>
+                                Intercept Track
                               </Text>
                             </View>
 
@@ -4651,71 +4680,29 @@ export default function App() {
                             marginBottom: 12
                           }}>
                             <Text style={{ color: '#cbd5e1', fontSize: 11 }}>
-                              {boatApproachDistanceM > 50
-                                ? `🧭 Helmsman Advisory: Hold heading ${realHeading} at 1.8 kn. Approach slow to prevent net entanglement with prop.`
-                                : `⚓ Grapple Ready: Vessel holding position ${boatApproachDistanceM}m over target. Ready to deploy four-prong grapple.`}
+                              🧭 Helmsman Advisory: Hold heading {realHeading} at 1.8 kn. Approach slow to prevent net entanglement with prop. Grapple station ready.
                             </Text>
                           </View>
 
-                          {/* Helmsman Interactive Approach Stepper */}
-                          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
-                            <TouchableOpacity
-                              style={{
-                                flex: 1,
-                                backgroundColor: '#071c2c',
-                                borderWidth: 1,
-                                borderColor: '#00f2fe',
-                                borderRadius: 6,
-                                paddingVertical: 8,
-                                alignItems: 'center'
-                              }}
-                              onPress={() => {
-                                setBoatApproachDistanceM(prev => Math.max(15, prev - 60));
-                                showToast(`🛥️ Boat closed range to ${Math.max(15, boatApproachDistanceM - 60)}m from confirmed net lock.`);
-                              }}
-                            >
-                              <Text style={{ color: '#00f2fe', fontSize: 11, fontWeight: '800' }}>
-                                🛥️ Steer Closer (-60m)
-                              </Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              style={{
-                                flex: 1,
-                                backgroundColor: '#064e3b',
-                                borderWidth: 1,
-                                borderColor: '#10b981',
-                                borderRadius: 6,
-                                paddingVertical: 8,
-                                alignItems: 'center'
-                              }}
-                              onPress={() => {
-                                setBoatApproachDistanceM(15);
-                                showToast('⚓ ARRIVED ON TARGET! Boat holding position directly over ghost net.');
-                              }}
-                            >
-                              <Text style={{ color: '#6ee7b7', fontSize: 11, fontWeight: '800' }}>
-                                ⚡ Arrive On Target (15m)
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-
-                          {/* Big Prominent Action Button: Launch Winch Recovery Console */}
+                          {/* ONE SINGLE ACTION BUTTON: ARRIVE ON TARGET & LAUNCH RECOVERY CONSOLE */}
                           <TouchableOpacity
                             style={{
-                              backgroundColor: boatApproachDistanceM <= 50 ? '#00e475' : '#00f2fe',
+                              backgroundColor: '#00e475',
                               borderRadius: 8,
                               paddingVertical: 14,
                               alignItems: 'center',
                               justifyContent: 'center',
                               flexDirection: 'row',
                               gap: 8,
-                              shadowColor: boatApproachDistanceM <= 50 ? '#00e475' : '#00f2fe',
-                              shadowOpacity: 0.4,
+                              shadowColor: '#00e475',
+                              shadowOpacity: 0.45,
                               shadowRadius: 10,
                               elevation: 6
                             }}
-                            onPress={() => setShowSonarConsole(true)}
+                            onPress={() => {
+                              setBoatApproachDistanceM(0);
+                              setShowSonarConsole(true);
+                            }}
                           >
                             <Text style={{ fontSize: 16 }}>⚓</Text>
                             <Text style={{
@@ -4724,9 +4711,7 @@ export default function App() {
                               fontWeight: '900',
                               letterSpacing: 0.5
                             }}>
-                              {boatApproachDistanceM <= 50
-                                ? '[ ⚓ ON TARGET: LAUNCH WINCH & RECOVERY CONSOLE ➔ ]'
-                                : '[ ⚓ PROCEED TO NET RECOVERY CONSOLE ➔ ]'}
+                              [ ⚓ ARRIVE ON TARGET & LAUNCH RECOVERY CONSOLE ➔ ]
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -4812,7 +4797,7 @@ export default function App() {
             id="sonar-batch-file-input"
             type="file"
             multiple
-            accept=".xtf,image/*"
+            accept=".xtf"
             style={{ display: 'none' }}
             onChange={handleSonarBatchUpload}
           />
@@ -4866,12 +4851,12 @@ export default function App() {
                 <Text style={{ color: pendingUploadFiles.length > 0 ? '#00e475' : '#00f2fe', fontSize: 13, fontWeight: '800', textAlign: 'center' }}>
                   {pendingUploadFiles.length > 0
                     ? `✅ ${pendingUploadFiles.length} Survey File(s) Selected`
-                    : 'Select .XTF Sonar Files or Photos'}
+                    : 'Select .XTF Marine Sonar Files'}
                 </Text>
                 <Text style={{ color: '#94a3b8', fontSize: 11, textAlign: 'center', marginTop: 3 }}>
                   {pendingUploadFiles.length > 0
                     ? pendingUploadFiles.map(f => f.name).slice(0, 3).join(', ') + (pendingUploadFiles.length > 3 ? ` + ${pendingUploadFiles.length - 3} more` : '')
-                    : 'Supported: .xtf (eXtended Triton Format), .png, .jpg'}
+                    : 'Supported: .xtf (eXtended Triton Format • 455kHz)'}
                 </Text>
 
                 <TouchableOpacity
@@ -4902,7 +4887,7 @@ export default function App() {
                     id="modal-sonar-file-input"
                     type="file"
                     multiple
-                    accept=".xtf,image/*"
+                    accept=".xtf"
                     style={{ display: 'none' }}
                     onChange={(e: any) => {
                       if (e.target?.files && e.target.files.length > 0) {
