@@ -17,6 +17,7 @@ from app.api.v1.missions import router as missions_router
 from app.api.v1.recycling import router as recycling_router
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.uploads import router as uploads_router
+from app.api.v1.admin import router as admin_router
 
 # Initialize database tables
 Base.metadata.create_all(bind=engine)
@@ -45,6 +46,7 @@ app.include_router(missions_router, prefix=settings.API_V1_STR)
 app.include_router(recycling_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
 app.include_router(uploads_router, prefix=settings.API_V1_STR)
+app.include_router(admin_router, prefix=settings.API_V1_STR)
 
 @app.on_event("startup")
 def on_startup():
@@ -54,6 +56,13 @@ def on_startup():
         from app.core.database import Base, engine
         Base.metadata.create_all(bind=engine)
         print(">>> GhostNet AI backend started successfully! Persistent database active.")
+        # Auto-seed authentic pilot data if fresh empty database
+        db = SessionLocal()
+        try:
+            from app.api.v1.admin import seed_pilot_data
+            seed_pilot_data(force=False, db=db)
+        finally:
+            db.close()
     except Exception as e:
         print(f">>> Database startup notice: {e}")
 

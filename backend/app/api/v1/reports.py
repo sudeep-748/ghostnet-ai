@@ -161,3 +161,24 @@ def sync_reports(batch: LostGearReportSyncBatch, db: Session = Depends(get_db)):
         synced_ids=synced_ids,
         failed_count=0
     )
+
+
+@router.patch("/lost-gear/{report_id}/dbt", response_model=LostGearReportResponse)
+def update_report_dbt_status(report_id: str, status_val: str = "disbursed", db: Session = Depends(get_db)):
+    report = db.query(LostGearReport).filter(
+        (LostGearReport.id == report_id) | (LostGearReport.client_report_id == report_id)
+    ).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    
+    current_notes = report.notes or ""
+    import re
+    if "DBT:" in current_notes:
+        new_notes = re.sub(r'DBT:\s*[A-Za-z0-9_-]+', f'DBT: {status_val}', current_notes)
+    else:
+        new_notes = (current_notes + f" • DBT: {status_val}").strip(" •")
+    
+    report.notes = new_notes
+    db.commit()
+    db.refresh(report)
+    return report

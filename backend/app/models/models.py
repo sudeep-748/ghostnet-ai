@@ -126,6 +126,25 @@ class LostGearReport(Base):
             return self.reporter.boat_id
         return "IND-TN-07-SP-0007"
 
+    @property
+    def dbt_status(self):
+        if not self.notes:
+            return "pending"
+        import re
+        m = re.search(r'DBT:\s*([A-Za-z0-9_-]+)', self.notes)
+        return m.group(1).lower() if m else "pending"
+
+    @property
+    def dbt_amount(self):
+        if not self.notes:
+            return 25000.0
+        import re
+        m = re.search(r'DBT_Amount:\s*(\d+(?:\.\d+)?)', self.notes)
+        if m:
+            return float(m.group(1))
+        wt = self.estimated_weight_kg or 1500.0
+        return round((wt / 1000.0) * 20000.0, 2)
+
 
 
 class DriftPrediction(Base):

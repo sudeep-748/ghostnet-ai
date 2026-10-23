@@ -13,6 +13,7 @@ import {
   Linking
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { AdminCommandCenter } from './AdminCommandCenter';
 
 // Local asset bundled directly inside the mobile app
 const LOGO_IMG = require('./assets/logo.png');
@@ -160,7 +161,7 @@ import {
 // Live cloud API base URL (Railway production backend)
 const API_BASE = 'https://ghostnet-ai-production.up.railway.app';
 
-type ScreenMode = 'SPLASH' | 'LOGIN_ROLE' | 'FISHERMAN' | 'RESCUE_CREW';
+type ScreenMode = 'SPLASH' | 'LOGIN_ROLE' | 'FISHERMAN' | 'RESCUE_CREW' | 'ADMIN';
 type Language = 'EN' | 'TA';
 
 interface UserAccount {
@@ -2082,7 +2083,8 @@ export default function App() {
 
             showToast(`✅ Welcome back, ${apiUser.name}!`);
             syncWithBackend();
-            if (apiUser.role === 'FISHERMAN') setScreen('FISHERMAN');
+            if (data.user.role === 'admin' || qUser.toLowerCase() === 'admin') setScreen('ADMIN');
+            else if (apiUser.role === 'FISHERMAN') setScreen('FISHERMAN');
             else setScreen('RESCUE_CREW');
             return;
           }
@@ -3983,6 +3985,39 @@ export default function App() {
             </Text>
           </TouchableOpacity>
 
+          {/* Direct Entry: Govt Command Center (Admin Portal) */}
+          <TouchableOpacity
+            style={{
+              marginTop: 18,
+              paddingVertical: 14,
+              paddingHorizontal: 16,
+              backgroundColor: 'rgba(0, 228, 117, 0.12)',
+              borderRadius: 10,
+              borderWidth: 1.5,
+              borderColor: '#00e475',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}
+            onPress={() => {
+              setScreen('ADMIN');
+              showToast('🏛️ Connecting to Govt. of Tamil Nadu Fisheries Command Center...');
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Text style={{ fontSize: 26 }}>🏛️</Text>
+              <View>
+                <Text style={{ color: '#00e475', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>
+                  GOVT. COMMAND CENTER (ADMIN)
+                </Text>
+                <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 2 }}>
+                  Dept. of Fisheries • Real-Time Database Tracking & DBT
+                </Text>
+              </View>
+            </View>
+            <Text style={{ color: '#00e475', fontSize: 18, fontWeight: 'bold' }}>➔</Text>
+          </TouchableOpacity>
+
           {/* View Database Button */}
           <TouchableOpacity
             style={{
@@ -4037,6 +4072,21 @@ export default function App() {
         )}
         {renderDatabaseModal()}
       </SafeAreaView>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // 2B. RENDER: GOVT COMMAND CENTER (ADMIN PORTAL)
+  // -------------------------------------------------------------
+  if (screen === 'ADMIN') {
+    return (
+      <AdminCommandCenter
+        onExit={() => {
+          setScreen('LOGIN_ROLE');
+          showToast('🚪 Logged out of Government Command Center');
+        }}
+        onShowToast={showToast}
+      />
     );
   }
 

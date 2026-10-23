@@ -111,6 +111,8 @@ class LostGearReportResponse(BaseModel):
     threat_level: Optional[str] = None
     reporter_name: Optional[str] = None
     vessel_tag: Optional[str] = None
+    dbt_status: Optional[str] = "pending"
+    dbt_amount: Optional[float] = None
     created_at: datetime
 
     class Config:

@@ -2,6 +2,7 @@ node_modules/
 .expo/
 __pycache__/
 *.pyc
+*.db
 .env
 sample_sonar_images/
 mobile/dist/sample_sonar_images/
