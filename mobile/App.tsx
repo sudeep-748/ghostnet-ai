@@ -132,6 +132,7 @@ const I18N = {
     stepDepth: 'Depth/Weight',
     tabDeclare: 'Declare Lost Gear',
     tabTracker: 'My Reports Tracker',
+    tabSimulator: 'Virtual Sea Trial',
 
     // Fisherman Step 1
     gpsSignalLocked: '● GPS Signal Locked',
@@ -282,6 +283,7 @@ const I18N = {
     stepDepth: 'ஆழம்/எடை',
     tabDeclare: 'வலை அறிவிப்பு',
     tabTracker: 'என் அறிக்கைகள்',
+    tabSimulator: 'கடல் பயணம்',
 
     // Fisherman Step 1
     gpsSignalLocked: '● ஜி.பி.எஸ் செயற்கைக்கோள் உறுதி',
@@ -583,7 +585,7 @@ export default function App() {
   // -------------------------------------------------------------
   // Fisherman Dashboard State
   // -------------------------------------------------------------
-  const [fisherTab, setFisherTab] = useState<'DECLARE' | 'TRACKER'>('DECLARE');
+  const [fisherTab, setFisherTab] = useState<'DECLARE' | 'TRACKER' | 'SIMULATOR'>('DECLARE');
   const [gpsCoords, setGpsCoords] = useState<string>(() => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -595,6 +597,80 @@ export default function App() {
   });
   const [selectedGear, setSelectedGear] = useState<'GILLNET' | 'TRAWL' | 'TRAP'>('GILLNET');
   const [selectedMaterial, setSelectedMaterial] = useState<'nylon' | 'polyethylene' | 'polypropylene' | 'mixed'>('nylon');
+  // -------------------------------------------------------------
+  // Fisherman Virtual Sea Trial Simulator State
+  // -------------------------------------------------------------
+  const [simBoatCoords, setSimBoatCoords] = useState<{ lat: number; lon: number }>({ lat: 13.1280, lon: 80.3010 });
+  const [simDestCoords, setSimDestCoords] = useState<{ lat: number; lon: number }>({ lat: 13.1420, lon: 80.3450 });
+  const [simDroppedCoords, setSimDroppedCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [isSimSailing, setIsSimSailing] = useState<boolean>(false);
+  const [simDirection, setSimDirection] = useState<'OFFSHORE' | 'RETURN'>('OFFSHORE');
+  const [simSpeedKn, setSimSpeedKn] = useState<number>(0.0);
+  const [lockedNetNotice, setLockedNetNotice] = useState<string | null>(null);
+
+  // Handle messages from the virtual sea trial iframe (e.g. clicking on map to set destination)
+  useEffect(() => {
+    const handleMapMessage = (ev: MessageEvent) => {
+      if (ev.data && ev.data.type === 'SET_SIM_DEST') {
+        const newDest = { lat: ev.data.lat, lon: ev.data.lon };
+        setSimDestCoords(newDest);
+        showToast(`🎯 Destination set: ${newDest.lat.toFixed(4)}°N, ${newDest.lon.toFixed(4)}°E`);
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('message', handleMapMessage);
+      return () => window.removeEventListener('message', handleMapMessage);
+    }
+  }, []);
+
+  // Real-Time Fisherman Sea Trial Simulation Loop (Haversine step interpolation)
+  useEffect(() => {
+    let interval: any;
+    if (isSimSailing) {
+      const destLat = simDirection === 'OFFSHORE' ? simDestCoords.lat : 13.1280;
+      const destLon = simDirection === 'OFFSHORE' ? simDestCoords.lon : 80.3010;
+
+      interval = setInterval(() => {
+        setSimBoatCoords((prev) => {
+          const dLat = destLat - prev.lat;
+          const dLon = destLon - prev.lon;
+          const distNm = calculateDistanceNm(prev.lat, prev.lon, destLat, destLon);
+
+          if (distNm < 0.05) {
+            setIsSimSailing(false);
+            setSimSpeedKn(0.0);
+            if (simDirection === 'OFFSHORE') {
+              showToast(language === 'TA' ? '⚓ ஆழ்கடலை அடைந்தது! [ 📍 வலை GPS பூட்டு ] தட்டவும்.' : '⚓ Arrived at offshore fishing grounds! Tap [ 📍 LOCK NET GPS ] to record loss.');
+            } else {
+              showToast(language === 'TA' ? '⚓ படகு காசிமேடு துறைமுகத்திற்கு திரும்பியது! இணையத்தை ஆன் செய்யவும்.' : '⚓ Vessel safely docked at Kasimedu Harbour! Turn Wi-Fi ON to sync.');
+            }
+            return { lat: destLat, lon: destLon };
+          }
+
+          const stepRatio = 0.08;
+          const nextLat = prev.lat + dLat * stepRatio;
+          const nextLon = prev.lon + dLon * stepRatio;
+
+          try {
+            if (typeof document !== 'undefined') {
+              const iframes = document.querySelectorAll('iframe');
+              iframes.forEach((ifr) => {
+                ifr.contentWindow?.postMessage(
+                  { type: 'SIM_BOAT_UPDATE', lat: nextLat, lon: nextLon },
+                  '*'
+                );
+              });
+            }
+          } catch (e) {}
+
+          setSimSpeedKn(12.4);
+          return { lat: nextLat, lon: nextLon };
+        });
+      }, 800);
+    }
+    return () => clearInterval(interval);
+  }, [isSimSailing, simDirection, simDestCoords, language]);
+
   const [estimatedDepth, setEstimatedDepth] = useState<number>(25);
   const [estimatedWeight, setEstimatedWeight] = useState<number>(1.2);
 
@@ -2000,6 +2076,129 @@ export default function App() {
   };
 
   // Helper: Generates self-contained interactive Leaflet satellite & marine chart with Member 1 AI drift simulation
+  
+  // Helper: Generates self-contained interactive Leaflet chart for Fisherman Sea Trial
+  const generateFishermanTrialHtml = (
+    boatLat: number,
+    boatLon: number,
+    boatTag: string,
+    destLat: number,
+    destLon: number,
+    droppedLat?: number,
+    droppedLon?: number
+  ) => {
+    const centerLat = (boatLat + destLat) / 2;
+    const centerLon = (boatLon + destLon) / 2;
+    const safeBoat = boatTag.replace(/'/g, "\\'");
+    const hasDropped = typeof droppedLat === 'number' && typeof droppedLon === 'number';
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #071626; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .custom-boat-marker { background: #38bdf8; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #ffffff; box-shadow: 0 0 16px #38bdf8; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .custom-dest-marker { background: #ffd166; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #ffffff; box-shadow: 0 0 16px #ffd166; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+    .custom-net-marker { background: #ff2a5f; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #ffffff; box-shadow: 0 0 18px #ff2a5f; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+    .custom-harbour-pin { background: #ffd166; color: #061320; font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 4px; border: 1px solid #ffffff; white-space: nowrap; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+    .custom-landmark-pin { background: rgba(19, 31, 46, 0.85); color: #94a3b8; font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; border: 1px solid #334155; white-space: nowrap; }
+    .custom-depth-pin { color: #38bdf8; font-size: 9px; font-family: monospace; font-weight: bold; background: rgba(6, 19, 32, 0.7); padding: 1px 4px; border-radius: 2px; white-space: nowrap; }
+    .leaflet-popup-content-wrapper { background: #061320; color: #e2e8f0; border: 1px solid #1e3a5f; border-radius: 8px; font-size: 12px; }
+    .leaflet-popup-tip { background: #061320; }
+    .map-mode-badge { position: absolute; top: 10px; left: 10px; z-index: 1000; background: rgba(6, 19, 32, 0.92); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 20px; padding: 4px 10px; color: #38bdf8; font-size: 10px; font-weight: 800; pointer-events: none; }
+    .map-hint-badge { position: absolute; bottom: 10px; left: 10px; z-index: 1000; background: rgba(6, 19, 32, 0.92); border: 1px solid #334155; border-radius: 6px; padding: 4px 8px; color: #94a3b8; font-size: 10px; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="map-mode-badge"><span style="color:#38bdf8;">●</span> SEA TRIAL NAVIGATION</div>
+  <div class="map-hint-badge">💡 Tap anywhere on sea to set destination</div>
+  <script>
+    var map = L.map('map', { zoomControl: false }).setView([${centerLat}, ${centerLon}], 11);
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+    // 1. Nautical Base Layer
+    var nauticalGroup = L.layerGroup().addTo(map);
+
+    // Bathymetry Zones
+    L.polygon([[13.45, 80.20], [13.45, 80.36], [13.30, 80.35], [13.20, 80.34], [13.13, 80.33], [13.08, 80.32], [13.00, 80.30], [12.75, 80.28], [12.75, 80.20]], { color: 'transparent', fillColor: '#0c273d', fillOpacity: 0.75 }).addTo(nauticalGroup);
+    L.polygon([[13.45, 80.36], [13.45, 80.40], [13.30, 80.39], [13.20, 80.38], [13.13, 80.37], [13.08, 80.36], [13.00, 80.34], [12.75, 80.32], [12.75, 80.28], [13.00, 80.30], [13.08, 80.32], [13.13, 80.33], [13.20, 80.34], [13.30, 80.35]], { color: 'transparent', fillColor: '#081d2f', fillOpacity: 0.85 }).addTo(nauticalGroup);
+
+    // Chennai Coast
+    var chennaiCoast = [[13.45, 80.00], [13.45, 80.35], [13.40, 80.34], [13.35, 80.335], [13.30, 80.33], [13.25, 80.32], [13.20, 80.31], [13.15, 80.30], [13.132, 80.298], [13.128, 80.303], [13.122, 80.299], [13.10, 80.295], [13.085, 80.292], [13.05, 80.283], [13.00, 80.275], [12.90, 80.255], [12.75, 80.245], [12.75, 80.00]];
+    L.polygon(chennaiCoast, { color: '#38bdf8', fillColor: '#131f2e', fillOpacity: 1.0, weight: 2 }).addTo(nauticalGroup);
+
+    // Harbour Basin
+    var kasimeduBasin = [[13.128, 80.298], [13.132, 80.306], [13.124, 80.308], [13.122, 80.299]];
+    L.polygon(kasimeduBasin, { color: '#ffd166', fillColor: '#064e3b', fillOpacity: 0.9, weight: 2.5 }).addTo(nauticalGroup);
+    L.polyline([[13.128, 80.298], [13.132, 80.306]], { color: '#ffd166', weight: 4 }).addTo(nauticalGroup);
+    L.polyline([[13.122, 80.299], [13.124, 80.308]], { color: '#ffd166', weight: 4 }).addTo(nauticalGroup);
+
+    var harbourPin = L.divIcon({ className: 'custom-harbour-pin', html: '⚓ KASIMEDU HARBOUR', iconSize: [120, 20] });
+    L.marker([13.128, 80.301], { icon: harbourPin }).addTo(nauticalGroup);
+
+    // Depth Lines
+    L.polyline([[13.45, 80.37], [13.30, 80.35], [13.20, 80.34], [13.13, 80.33], [13.08, 80.32], [13.00, 80.30], [12.75, 80.28]], { color: '#00e475', weight: 1.5, dashArray: '4, 4', opacity: 0.8 }).addTo(nauticalGroup);
+    L.polyline([[13.45, 80.41], [13.30, 80.39], [13.20, 80.38], [13.13, 80.37], [13.08, 80.36], [13.00, 80.34], [12.75, 80.32]], { color: '#ffd166', weight: 1.5, dashArray: '4, 4', opacity: 0.8 }).addTo(nauticalGroup);
+
+    // Online Satellite Layer
+    var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 });
+    satLayer.addTo(map);
+
+    // Boat Marker
+    var boatPos = [${boatLat}, ${boatLon}];
+    var boatIcon = L.divIcon({ className: '', html: '<div class="custom-boat-marker">🛥️</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
+    var boatMarker = L.marker(boatPos, { icon: boatIcon }).addTo(map).bindPopup('<b>🛥️ ' + ${JSON.stringify(safeBoat)} + '</b><br>Live Fishing Vessel Position');
+
+    // Destination Marker
+    var destPos = [${destLat}, ${destLon}];
+    var destIcon = L.divIcon({ className: '', html: '<div class="custom-dest-marker">🎯</div>', iconSize: [24, 24], iconAnchor: [12, 12] });
+    var destMarker = L.marker(destPos, { icon: destIcon }).addTo(map).bindPopup('<b>🎯 Target Fishing Ground</b><br>Coordinates: ' + destPos[0].toFixed(4) + '°N, ' + destPos[1].toFixed(4) + '°E');
+
+    // Dropped Net Marker (if locked)
+    var isDropped = ${Boolean(hasDropped)};
+    if (isDropped) {
+      var netPos = [${droppedLat || '0'}, ${droppedLon || '0'}];
+      var netIcon = L.divIcon({ className: '', html: '<div class="custom-net-marker">🔴</div>', iconSize: [26, 26], iconAnchor: [13, 13] });
+      L.marker(netPos, { icon: netIcon }).addTo(map).bindPopup('<b>🔴 Locked Net Loss Location</b><br>' + netPos[0].toFixed(4) + '°N, ' + netPos[1].toFixed(4) + '°E');
+    }
+
+    // Trajectory Track Line
+    var trackLine = L.polyline([boatPos, destPos], { color: '#38bdf8', weight: 2.5, dashArray: '6, 6' }).addTo(map);
+
+    // Allow user to tap anywhere on sea to change destination
+    map.on('click', function(e) {
+      var clickLat = e.latlng.lat;
+      var clickLon = e.latlng.lng;
+      if (clickLon > 80.295) { // Only offshore
+        destPos = [clickLat, clickLon];
+        destMarker.setLatLng(destPos);
+        destMarker.setPopupContent('<b>🎯 Target Fishing Ground</b><br>Coordinates: ' + clickLat.toFixed(4) + '°N, ' + clickLon.toFixed(4) + '°E');
+        trackLine.setLatLngs([boatPos, destPos]);
+        window.parent.postMessage({ type: 'SET_SIM_DEST', lat: clickLat, lon: clickLon }, '*');
+      }
+    });
+
+    // Listen for live boat movement updates
+    window.addEventListener('message', function(ev) {
+      if (ev.data && ev.data.type === 'SIM_BOAT_UPDATE') {
+        boatPos = [ev.data.lat, ev.data.lon];
+        boatMarker.setLatLng(boatPos);
+        trackLine.setLatLngs([boatPos, destPos]);
+      }
+    });
+
+    map.fitBounds(L.latLngBounds([boatPos, destPos]), { padding: [50, 50] });
+  </script>
+</body>
+</html>`;
+  };
+
   const generateMarineChartHtml = (
     boatLat: number,
     boatLon: number,
@@ -3641,13 +3840,13 @@ export default function App() {
             </View>
           </View>
 
-          {/* Segmented Navigation Tabs */}
+          {/* Segmented Navigation Tabs: 3 Tabs (Declare, Tracker, Virtual Sea Trial) */}
           <View style={styles.segmentedTabBar}>
             <TouchableOpacity
               style={[styles.segmentedTab, fisherTab === 'DECLARE' && styles.segmentedTabActive]}
               onPress={() => setFisherTab('DECLARE')}
             >
-              <Text style={{ fontSize: 16 }}>📝</Text>
+              <Text style={{ fontSize: 15 }}>📝</Text>
               <Text
                 style={[
                   styles.segmentedTabText,
@@ -3662,7 +3861,7 @@ export default function App() {
               style={[styles.segmentedTab, fisherTab === 'TRACKER' && styles.segmentedTabActive]}
               onPress={() => setFisherTab('TRACKER')}
             >
-              <Text style={{ fontSize: 16 }}>🛰️</Text>
+              <Text style={{ fontSize: 15 }}>🛰️</Text>
               <Text
                 style={[
                   styles.segmentedTabText,
@@ -3670,6 +3869,21 @@ export default function App() {
                 ]}
               >
                 {t('tabTracker')}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.segmentedTab, fisherTab === 'SIMULATOR' && styles.segmentedTabActive]}
+              onPress={() => setFisherTab('SIMULATOR')}
+            >
+              <Text style={{ fontSize: 15 }}>🛥️</Text>
+              <Text
+                style={[
+                  styles.segmentedTabText,
+                  fisherTab === 'SIMULATOR' && styles.segmentedTabTextActive
+                ]}
+              >
+                {t('tabSimulator')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -3712,6 +3926,46 @@ export default function App() {
                   </Text>
                   <Text style={styles.autoTag}>{t('gpsAuto')}</Text>
                 </View>
+
+                {lockedNetNotice && (
+                  <View style={{ backgroundColor: 'rgba(0, 228, 117, 0.12)', borderWidth: 1, borderColor: '#00e475', borderRadius: 8, padding: 10, marginTop: 10 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ color: '#00e475', fontSize: 12, fontWeight: '800' }}>
+                        {language === 'TA' ? '✅ ஆழ்கடல் GPS பூட்டப்பட்டது!' : '✅ Deep-Sea GPS Fix Locked!'}
+                      </Text>
+                      <TouchableOpacity onPress={() => setFisherTab('SIMULATOR')}>
+                        <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: '700' }}>
+                          {language === 'TA' ? 'வரைபடம் ➔' : 'View Map ➔'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={{ color: '#cbd5e1', fontSize: 11, marginTop: 4 }}>
+                      📍 {lockedNetNotice}
+                    </Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={{
+                    marginTop: 10,
+                    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                    borderWidth: 1,
+                    borderColor: '#38bdf8',
+                    borderRadius: 8,
+                    paddingVertical: 9,
+                    paddingHorizontal: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                  onPress={() => setFisherTab('SIMULATOR')}
+                >
+                  <Text style={{ fontSize: 13 }}>🛥️</Text>
+                  <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: '800' }}>
+                    {language === 'TA' ? 'ஆழ்கடல் மாதிரி பயணம் & இருப்பிட பதிவு' : 'Virtual Sea Trial: Sail Offshore & Lock Net GPS'}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               {/* Net Selector */}
@@ -3903,7 +4157,7 @@ export default function App() {
                 <Text style={styles.declareSubmitText}>{t('submitDeclareBtn')}</Text>
               </TouchableOpacity>
             </View>
-          ) : (
+          ) : fisherTab === 'TRACKER' ? (
             /* TAB 2: TRACKER SCREEN PREVIEW */
             <View style={{ gap: 14 }}>
               <View style={styles.trackerHeaderRow}>
@@ -4018,6 +4272,233 @@ export default function App() {
                   {language === 'TA' ? 'மற்றொரு இழந்த வலையை பதிவு செய்' : 'File Another Lost Gear Report'}
                 </Text>
               </TouchableOpacity>
+            </View>
+          ) : (
+            /* TAB 3: VIRTUAL SEA TRIAL SIMULATOR (100% Dynamic Play/Pause/Lock) */
+            <View style={{ gap: 14 }}>
+              {/* Header Banner */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                  <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '800' }}>
+                    {language === 'TA' ? '🛥️ ஆழ்கடல் மாதிரி பயணம்' : '🛥️ Virtual Sea Trial Simulation'}
+                  </Text>
+                  <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 2 }}>
+                    {language === 'TA' ? 'காசிமேடு துறைமுகம் ➔ வங்காள விரிகுடா ஆழ்கடல்' : 'Kasimedu Harbour ➔ Bay of Bengal Deep Sea'}
+                  </Text>
+                </View>
+                <View style={{ backgroundColor: isSimSailing ? 'rgba(0, 228, 117, 0.15)' : 'rgba(148, 163, 184, 0.15)', borderWidth: 1, borderColor: isSimSailing ? '#00e475' : '#64748b', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                  <Text style={{ color: isSimSailing ? '#00e475' : '#94a3b8', fontSize: 10, fontWeight: '800' }}>
+                    {isSimSailing ? (simDirection === 'OFFSHORE' ? '▶️ SAILING OFFSHORE' : '⚓ RETURNING TO PORT') : '⏸️ STATIONARY'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Interactive Marine Chart Card */}
+              <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1.5, borderColor: '#1e3a5f', backgroundColor: '#071626' }}>
+                <iframe
+                  srcDoc={generateFishermanTrialHtml(
+                    simBoatCoords.lat,
+                    simBoatCoords.lon,
+                    currentUser?.boatTag || 'IND-TN-07-SP-0007',
+                    simDestCoords.lat,
+                    simDestCoords.lon,
+                    simDroppedCoords?.lat,
+                    simDroppedCoords?.lon
+                  )}
+                  style={{ width: '100%', height: 320, border: 'none' }}
+                  title="Fisherman Sea Trial Chart"
+                />
+              </View>
+
+              {/* 4-Tile Telemetry Grid */}
+              {(() => {
+                const currentDestLat = simDirection === 'OFFSHORE' ? simDestCoords.lat : 13.1280;
+                const currentDestLon = simDirection === 'OFFSHORE' ? simDestCoords.lon : 80.3010;
+                const simDistNm = calculateDistanceNm(simBoatCoords.lat, simBoatCoords.lon, currentDestLat, currentDestLon);
+                const simHeading = calculateBearing(simBoatCoords.lat, simBoatCoords.lon, currentDestLat, currentDestLon);
+                const simEtaMin = simSpeedKn > 0.5 ? Math.max(1, Math.round((simDistNm / simSpeedKn) * 60)) : 0;
+
+                return (
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {/* Tile 1: Distance */}
+                    <View style={{ flex: 1, backgroundColor: '#0f172a', borderRadius: 8, padding: 8, borderWidth: 1, borderColor: '#1e293b' }}>
+                      <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '700' }}>DISTANCE</Text>
+                      <Text style={{ color: '#00e475', fontSize: 14, fontWeight: '900', marginTop: 2 }}>{simDistNm} NM</Text>
+                      <Text style={{ color: '#64748b', fontSize: 8 }}>{simDirection === 'OFFSHORE' ? 'To Target' : 'To Dock'}</Text>
+                    </View>
+
+                    {/* Tile 2: Bearing */}
+                    <View style={{ flex: 1, backgroundColor: '#0f172a', borderRadius: 8, padding: 8, borderWidth: 1, borderColor: '#1e293b' }}>
+                      <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '700' }}>BEARING</Text>
+                      <Text style={{ color: '#38bdf8', fontSize: 12, fontWeight: '900', marginTop: 2 }} numberOfLines={1}>{simHeading}</Text>
+                      <Text style={{ color: '#64748b', fontSize: 8 }}>Track Vector</Text>
+                    </View>
+
+                    {/* Tile 3: Speed */}
+                    <View style={{ flex: 1, backgroundColor: '#0f172a', borderRadius: 8, padding: 8, borderWidth: 1, borderColor: '#1e293b' }}>
+                      <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '700' }}>SPEED</Text>
+                      <Text style={{ color: simSpeedKn > 0 ? '#00e475' : '#94a3b8', fontSize: 14, fontWeight: '900', marginTop: 2 }}>
+                        {simSpeedKn > 0 ? `${simSpeedKn.toFixed(1)} kn` : '0.0 kn'}
+                      </Text>
+                      <Text style={{ color: '#64748b', fontSize: 8 }}>{simSpeedKn > 0 ? 'Cruise' : 'Stationary'}</Text>
+                    </View>
+
+                    {/* Tile 4: Arrival ETA */}
+                    <View style={{ flex: 1, backgroundColor: '#0f172a', borderRadius: 8, padding: 8, borderWidth: 1, borderColor: '#1e293b' }}>
+                      <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '700' }}>ARRIVAL</Text>
+                      <Text style={{ color: '#ffd166', fontSize: 14, fontWeight: '900', marginTop: 2 }}>
+                        {simSpeedKn > 0 ? `${simEtaMin} MIN` : 'PAUSED'}
+                      </Text>
+                      <Text style={{ color: '#64748b', fontSize: 8 }}>Est. Time</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {/* Interactive Action Controls */}
+              <View style={{ backgroundColor: '#131f2e', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#1e3a5f', gap: 10 }}>
+                <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '700' }}>
+                  {language === 'TA' ? 'பயணக் கட்டுப்பாடுகள்' : 'VESSEL NAVIGATION CONTROLS'}
+                </Text>
+
+                {/* Row 1: Sail & Pause Controls */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1.5,
+                      backgroundColor: isSimSailing ? '#ef4444' : '#0284c7',
+                      paddingVertical: 11,
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6
+                    }}
+                    onPress={() => {
+                      if (isSimSailing) {
+                        setIsSimSailing(false);
+                        setSimSpeedKn(0.0);
+                        showToast(language === 'TA' ? '⏸️ படகு நிறுத்தப்பட்டது (0.0 kn)' : '⏸️ Vessel Paused (0.0 kn - Stationary)');
+                      } else {
+                        setIsSimSailing(true);
+                        showToast(simDirection === 'OFFSHORE' ? '▶️ Sailing Offshore into Bay of Bengal (12.4 kn)' : '⚓ Sailing back to Kasimedu Harbour (12.4 kn)');
+                      }
+                    }}
+                  >
+                    <Text style={{ fontSize: 14 }}>{isSimSailing ? '⏸️' : '▶️'}</Text>
+                    <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '800' }}>
+                      {isSimSailing
+                        ? (language === 'TA' ? 'நிறுத்து (PAUSE)' : 'PAUSE ENGINE')
+                        : (language === 'TA' ? 'படகை செலுத்து' : (simDirection === 'OFFSHORE' ? 'SAIL BOAT' : 'RESUME RETURN'))}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#1e293b',
+                      paddingVertical: 11,
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4
+                    }}
+                    onPress={() => {
+                      setIsSimSailing(false);
+                      setSimSpeedKn(0.0);
+                      setSimDirection('OFFSHORE');
+                      setSimBoatCoords({ lat: 13.1280, lon: 80.3010 });
+                      setSimDroppedCoords(null);
+                      setLockedNetNotice(null);
+                      showToast(language === 'TA' ? '🔄 படகு துறைமுகத்திற்கு மீட்டமைக்கப்பட்டது' : '🔄 Reset vessel to Kasimedu Dock');
+                    }}
+                  >
+                    <Text style={{ fontSize: 12 }}>🔄</Text>
+                    <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '700' }}>
+                      {language === 'TA' ? 'மீட்டமை' : 'RESET'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Row 2: Lock Deep-Sea Net GPS (Manual) */}
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#10b981',
+                    paddingVertical: 12,
+                    borderRadius: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                  onPress={() => {
+                    const formatted = `${simBoatCoords.lat.toFixed(4)}° N, ${simBoatCoords.lon.toFixed(4)}° E`;
+                    setGpsCoords(formatted);
+                    setSimDroppedCoords({ ...simBoatCoords });
+                    const distOffshore = calculateDistanceNm(13.1280, 80.3010, simBoatCoords.lat, simBoatCoords.lon);
+                    const note = `${formatted} (${distOffshore} NM off Kasimedu)`;
+                    setLockedNetNotice(note);
+                    showToast(
+                      language === 'TA'
+                        ? `📍 ஆழ்கடல் வலை இருப்பிடம் பூட்டப்பட்டது: ${formatted}`
+                        : `📍 Deep-Sea Net GPS Locked: ${formatted} (${distOffshore} NM offshore)!`
+                    );
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>📍</Text>
+                  <Text style={{ color: '#030b14', fontSize: 13, fontWeight: '900' }}>
+                    {language === 'TA' ? 'வலையின் ஆழ்கடல் GPS பூட்டு' : 'LOCK NET GPS AT CURRENT POSITION'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Row 3: Action Buttons (Go to Declare OR Sail Back to Shore) */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                      borderWidth: 1,
+                      borderColor: '#38bdf8',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    onPress={() => setFisherTab('DECLARE')}
+                  >
+                    <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: '800' }}>
+                      {language === 'TA' ? '📝 அறிவிப்பு படிவத்திற்கு செல் ➔' : '📝 Go to Declare Form ➔'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      backgroundColor: simDirection === 'RETURN' && isSimSailing ? '#047857' : 'rgba(16, 185, 129, 0.2)',
+                      borderWidth: 1,
+                      borderColor: '#10b981',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    onPress={() => {
+                      setSimDirection('RETURN');
+                      setIsSimSailing(true);
+                      showToast(
+                        language === 'TA'
+                          ? '⚓ படகு காசிமேடு துறைமுகம் நோக்கி திரும்புகிறது...'
+                          : '⚓ Sailing boat back to Kasimedu Harbour (12.4 kn)...'
+                      );
+                    }}
+                  >
+                    <Text style={{ color: '#34d399', fontSize: 11, fontWeight: '800' }}>
+                      {language === 'TA' ? '⚓ துறைமுகத்திற்கு திரும்பு' : '⚓ Sail Back to Port'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           )}
         </ScrollView>
