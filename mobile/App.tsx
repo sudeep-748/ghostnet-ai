@@ -4959,12 +4959,12 @@ export default function App() {
                   );
                 })()}
 
-                {/* Tactical Side-Scan Sonar Launcher Card */}
+                {/* Tactical Side-Scan Sonar Launcher Card (State-Aware) */}
                 <TouchableOpacity
                   style={{
-                    backgroundColor: '#071018',
+                    backgroundColor: isNetMarkedOnMap && detectedNetTarget ? '#071813' : '#071018',
                     borderWidth: 1.5,
-                    borderColor: '#00f2fe',
+                    borderColor: isNetMarkedOnMap && detectedNetTarget ? '#00e475' : '#00f2fe',
                     borderRadius: 12,
                     padding: 14,
                     flexDirection: 'row',
@@ -4972,39 +4972,84 @@ export default function App() {
                     justifyContent: 'space-between',
                     marginTop: 14,
                     marginBottom: 12,
-                    shadowColor: '#00f2fe',
+                    shadowColor: isNetMarkedOnMap && detectedNetTarget ? '#00e475' : '#00f2fe',
                     shadowOpacity: 0.3,
                     shadowRadius: 10,
                     elevation: 5
                   }}
-                  onPress={() => setShowSonarUploadModal(true)}
+                  onPress={() => {
+                    if (isNetMarkedOnMap && detectedNetTarget) {
+                      setShowSonarConsole(true);
+                    } else {
+                      setShowSonarUploadModal(true);
+                    }
+                  }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
                     <View style={{
                       width: 44,
                       height: 44,
                       borderRadius: 10,
-                      backgroundColor: 'rgba(0, 242, 254, 0.12)',
+                      backgroundColor: isNetMarkedOnMap && detectedNetTarget ? 'rgba(0, 228, 117, 0.12)' : 'rgba(0, 242, 254, 0.12)',
                       alignItems: 'center',
                       justifyContent: 'center',
                       borderWidth: 1,
-                      borderColor: 'rgba(0, 242, 254, 0.4)'
+                      borderColor: isNetMarkedOnMap && detectedNetTarget ? 'rgba(0, 228, 117, 0.4)' : 'rgba(0, 242, 254, 0.4)'
                     }}>
-                      <Text style={{ fontSize: 22 }}>📡</Text>
+                      <Text style={{ fontSize: 22 }}>{isNetMarkedOnMap && detectedNetTarget ? '🎯' : '📡'}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ color: '#00f2fe', fontSize: 13, fontWeight: '900', letterSpacing: 0.4 }}>
-                          START SIDE-SCAN SONAR IMAGING
+                        <Text style={{
+                          color: isNetMarkedOnMap && detectedNetTarget ? '#00e475' : '#00f2fe',
+                          fontSize: 13,
+                          fontWeight: '900',
+                          letterSpacing: 0.4
+                        }}>
+                          {isNetMarkedOnMap && detectedNetTarget
+                            ? `SONAR TARGET LOCKED • ${((detectedNetTarget.confidence || 0.94) * 100).toFixed(1)}% MATCH`
+                            : 'START SIDE-SCAN SONAR IMAGING'}
                         </Text>
-                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10b981' }} />
+                        <View style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: 3,
+                          backgroundColor: isNetMarkedOnMap && detectedNetTarget ? '#00e475' : '#10b981'
+                        }} />
                       </View>
                       <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 2 }}>
-                        Acoustic Waterfall • Net Shadow AI & Extraction Protocol
+                        {isNetMarkedOnMap && detectedNetTarget
+                          ? `Target Pinned at ${detectedNetTarget.gpsCoordinates} • Tap to view Echogram / Re-scan`
+                          : 'Acoustic Waterfall • Net Shadow AI & Extraction Protocol'}
                       </Text>
                     </View>
                   </View>
-                  <Text style={{ color: '#00f2fe', fontSize: 18, fontWeight: 'bold', marginLeft: 8 }}>➔</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {isNetMarkedOnMap && detectedNetTarget && (
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: '#334155'
+                        }}
+                        onPress={(e: any) => {
+                          e.stopPropagation();
+                          setShowSonarUploadModal(true);
+                        }}
+                      >
+                        <Text style={{ color: '#94a3b8', fontSize: 10, fontWeight: '700' }}>Re-scan ↻</Text>
+                      </TouchableOpacity>
+                    )}
+                    <Text style={{
+                      color: isNetMarkedOnMap && detectedNetTarget ? '#00e475' : '#00f2fe',
+                      fontSize: 18,
+                      fontWeight: 'bold',
+                      marginLeft: 4
+                    }}>➔</Text>
+                  </View>
                 </TouchableOpacity>
 
                 {/* Mission Completion Action Card */}
