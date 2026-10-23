@@ -120,7 +120,6 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     else setIsRefreshing(true);
 
     try {
-      // 1. Fetch dashboard aggregated payload
       const [dashRes, impactRes, recRes, missionsRes] = await Promise.all([
         fetch(`${API_BASE}/api/v1/admin/dashboard`).catch(() => null),
         fetch(`${API_BASE}/api/v1/analytics/impact`).catch(() => null),
@@ -163,7 +162,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
         }
       }
 
-      // If database is currently empty, seed authentic pilot data and re-fetch!
+      // If database is empty, seed authentic pilot data and re-fetch
       if (loadedReports.length === 0) {
         try {
           const seedRes = await fetch(`${API_BASE}/api/v1/admin/seed-pilot-data`, {
@@ -209,13 +208,11 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
       setReports(loadedReports);
       setMissions(loadedMissions);
 
-      // Parse Impact Analytics from database
       if (impactRes && impactRes.ok) {
         const impactData = await impactRes.json();
         setImpact(impactData);
       }
 
-      // Parse Recycling Assignments from database
       if (recRes && recRes.ok) {
         const recData = await recRes.json();
         if (Array.isArray(recData)) setRecycling(recData);
@@ -271,7 +268,6 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
           );
         }
       } else {
-        // Fallback optimistic update
         setReports((prev) =>
           prev.map((r) => (r.id === reportId ? { ...r, dbt_status: 'disbursed' } : r))
         );
@@ -323,7 +319,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     });
   }, [reports, dbtSearchQuery, dbtFilter]);
 
-  // Generates Leaflet Master Map HTML with dynamic markers from database
+  // Generates Leaflet Master Map HTML using Esri World Ocean Basemap (NO WATERMARKS, NO API KEYS!)
   const generateDynamicMapHtml = () => {
     const targetMarkersJson = JSON.stringify(
       reports.map((r) => ({
@@ -348,13 +344,13 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     * { box-sizing: border-box; }
-    html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #071626; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #081d33; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .custom-net-marker { border-radius: 50%; border: 2px solid #ffffff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900; color: #fff; cursor: pointer; transition: transform 0.2s; }
     .custom-net-marker:hover { transform: scale(1.3); }
     .marker-lost { background: #ef4444; box-shadow: 0 0 16px rgba(239, 68, 68, 0.85); }
     .marker-pending { background: #f59e0b; box-shadow: 0 0 16px rgba(245, 158, 11, 0.85); }
     .marker-confirmed { background: #00e475; box-shadow: 0 0 16px rgba(0, 228, 117, 0.85); }
-    .vessel-marker { background: #00f2fe; border: 2px solid #fff; border-radius: 6px; padding: 2px 6px; font-size: 11px; font-weight: bold; color: #030b14; box-shadow: 0 0 14px #00f2fe; }
+    .vessel-marker { background: #00f2fe; border: 2px solid #fff; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: bold; color: #030b14; box-shadow: 0 0 14px #00f2fe; }
     .leaflet-popup-content-wrapper { background: #0b1726; color: #e2e8f0; border: 1px solid #1e3a5f; border-radius: 8px; font-size: 12px; }
     .leaflet-popup-tip { background: #0b1726; }
     .map-telemetry-badge { position: absolute; top: 12px; left: 12px; z-index: 1000; background: rgba(7, 22, 38, 0.92); border: 1px solid #1e3a5f; border-radius: 6px; padding: 6px 12px; color: #00f2fe; font-size: 11px; font-weight: 700; pointer-events: none; }
@@ -363,29 +359,31 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
 <body>
   <div id="map"></div>
   <div class="map-telemetry-badge">
-    📡 LIVE DATABASE TELEMETRY • BAY OF BENGAL
+    📡 LIVE AIS TELEMETRY • TAMIL NADU & BAY OF BENGAL
   </div>
   <script>
     var map = L.map('map', { zoomControl: false }).setView([13.14, 80.32], 11);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 18,
-      attribution: '&copy; CartoDB &copy; OpenStreetMap'
+    // Free Esri World Ocean Basemap — Zero Watermark, Zero API Key
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 13,
+      attribution: 'Esri, GEBCO, NOAA'
     }).addTo(map);
 
-    // Bathymetric zones
-    L.polygon([[[13.40, 80.20], [13.40, 80.45], [12.80, 80.45], [12.80, 80.20]]], {
-      color: 'transparent', fillColor: '#062038', fillOpacity: 0.45
+    // Esri Ocean Labels and Depth Reference
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 13,
+      attribution: ''
     }).addTo(map);
 
     // Depth Contours
     L.polyline([[13.40, 80.34], [13.25, 80.32], [13.12, 80.31], [13.00, 80.29], [12.85, 80.27]], {
-      color: '#00f2fe', weight: 1.5, dashArray: '5, 5', opacity: 0.6
+      color: '#00f2fe', weight: 2, dashArray: '5, 5', opacity: 0.8
     }).bindPopup("20-Metre Isobath").addTo(map);
 
     L.polyline([[13.40, 80.40], [13.25, 80.38], [13.12, 80.37], [13.00, 80.35], [12.85, 80.33]], {
-      color: '#38bdf8', weight: 1.5, dashArray: '3, 6', opacity: 0.7
+      color: '#38bdf8', weight: 2, dashArray: '3, 6', opacity: 0.9
     }).bindPopup("50-Metre Deep Seabed Trench").addTo(map);
 
     // Kasimedu Harbour Base
@@ -396,7 +394,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     });
     L.marker([13.128, 80.301], { icon: kasimeduPin }).bindPopup("<b>Kasimedu Fishing Harbour</b><br>Command Dispatch Station").addTo(map);
 
-    // Fleet Vessels from Database
+    // Flagship Vessel
     var flagshipIcon = L.divIcon({
       className: 'vessel-marker',
       html: '🛥️ RV Samudra Rakshak (IND-TN-07-SP-0007)',
@@ -408,7 +406,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
       radius: 3500,
       color: '#00f2fe',
       fillColor: '#00f2fe',
-      fillOpacity: 0.08,
+      fillOpacity: 0.12,
       dashArray: '4, 4'
     }).addTo(map);
 
@@ -508,9 +506,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
         </View>
       </View>
 
-      {/* ---------------- MAIN APP LAYOUT: SIDEBAR + CONTENT ---------------- */}
+      {/* ---------------- MAIN APP LAYOUT: SIDEBAR + WHITE WORKSPACE ---------------- */}
       <View style={styles.mainLayout}>
-        {/* LEFT SIDEBAR NAVIGATION */}
+        {/* LEFT SIDEBAR NAVIGATION (DARK NAVY #0c1523) */}
         <View style={styles.sidebar}>
           <View style={styles.sidebarNavGroup}>
             <Text style={styles.sidebarSectionHeader}>OPERATIONAL UNITS</Text>
@@ -644,11 +642,11 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
           </View>
         </View>
 
-        {/* ---------------- RIGHT CONTENT AREA ---------------- */}
+        {/* ---------------- RIGHT CONTENT AREA (CLEAN WHITE #ffffff / #f8fafc) ---------------- */}
         <View style={styles.contentArea}>
           {isLoading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#00f2fe" />
+              <ActivityIndicator size="large" color="#0284c7" />
               <Text style={styles.loadingText}>Fetching Live Marine Database Records...</Text>
             </View>
           ) : (
@@ -658,9 +656,19 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
               {/* ============================================================== */}
               {activeTab === 'TOTAL_MAP' && (
                 <View style={styles.fullScreenTab}>
+                  {/* Map Header */}
+                  <View style={{ marginBottom: 6 }}>
+                    <Text style={styles.whiteCanvasTitle}>
+                      Tamil Nadu & Bay of Bengal Ghost Net Tracking Map
+                    </Text>
+                    <Text style={styles.whiteCanvasSub}>
+                      Live Sector Link • GRID: B05-04 / UTM 44N • Zone: All Coastal Sectors
+                    </Text>
+                  </View>
+
                   {/* Map & Target Flyout Split */}
                   <View style={styles.mapWorkspaceRow}>
-                    {/* Left: Leaflet Master Map Container */}
+                    {/* Left: Master Map Container */}
                     <View style={styles.mapFrameWrapper}>
                       {typeof window !== 'undefined' ? (
                         <iframe
@@ -675,7 +683,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                         />
                       ) : (
                         <View style={styles.mapFallback}>
-                          <Text style={{ color: '#00f2fe' }}>Loading Bay of Bengal Maritime Chart...</Text>
+                          <Text style={{ color: '#0284c7' }}>Loading Bay of Bengal Maritime Chart...</Text>
                         </View>
                       )}
 
@@ -696,7 +704,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                       </View>
                     </View>
 
-                    {/* Right: Target Details Card (Populated Dynamically from Database) */}
+                    {/* Right: Target Details Flyout Card (Dark Navy on Map) */}
                     <View style={styles.targetDetailsCard}>
                       <View style={styles.targetCardHeader}>
                         <View>
@@ -755,7 +763,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                           <Text style={[styles.detailValue, { color: '#00f2fe' }]}>
                             {selectedReport?.lat.toFixed(4)}°N, {selectedReport?.lon.toFixed(4)}°E
                           </Text>
-                          <Text style={styles.detailSub}>Live Satellite Position</Text>
+                          <Text style={styles.detailSub}>Live Satellite Fix</Text>
                         </View>
 
                         <View style={styles.detailItem}>
@@ -786,7 +794,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                         <TouchableOpacity
                           style={styles.actionBtnOutline}
                           onPress={() => {
-                            if (onShowToast) onShowToast('📡 Repositioning sonar sweep beam...');
+                            if (onShowToast) onShowToast('📡 Repositioning sonar beam...');
                           }}
                         >
                           <Text style={styles.actionBtnOutlineText}>📡 Reposition Sonar</Text>
@@ -807,34 +815,46 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                     </View>
                   </View>
 
-                  {/* Bottom 4 KPI Tickers (Computed from Database) */}
-                  <View style={styles.kpiRow}>
-                    <View style={styles.kpiCard}>
-                      <Text style={styles.kpiValue}>
-                        {(totalRecoveredKg / 1000).toFixed(1)} T
+                  {/* Bottom 4 Clean WHITE KPI Cards Matching Reference Image */}
+                  <View style={styles.whiteKpiRow}>
+                    <View style={styles.whiteKpiCard}>
+                      <Text style={styles.whiteKpiLabel}>TOTAL TONNAGE LIFTED</Text>
+                      <Text style={styles.whiteKpiVal}>
+                        {(totalRecoveredKg / 1000).toFixed(1)} Tons
                       </Text>
-                      <Text style={styles.kpiTitle}>Total Lifted Net Scrap</Text>
-                      <Text style={styles.kpiSubtitle}>Kasimedu Sector & Bay of Bengal</Text>
+                      <View style={styles.whiteKpiProgressTrack}>
+                        <View style={[styles.whiteKpiProgressFill, { width: '85%' }]} />
+                      </View>
+                      <Text style={styles.whiteKpiSub}>+2.2T this month • 120 maritime ops</Text>
                     </View>
 
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#34d399' }]}>
-                        {(co2eAvoidedKg / 1000).toFixed(1)} T
+                    <View style={styles.whiteKpiCard}>
+                      <Text style={styles.whiteKpiLabel}>ATMOSPHERIC ABATEMENT</Text>
+                      <Text style={[styles.whiteKpiVal, { color: '#059669' }]}>
+                        {(co2eAvoidedKg / 1000).toFixed(1)} Tons CO₂e
                       </Text>
-                      <Text style={styles.kpiTitle}>CO₂e Avoided</Text>
-                      <Text style={styles.kpiSubtitle}>Verra VCS Standard Verified</Text>
+                      <View style={styles.whiteKpiProgressTrack}>
+                        <View style={[styles.whiteKpiProgressFill, { width: '78%', backgroundColor: '#059669' }]} />
+                      </View>
+                      <Text style={styles.whiteKpiSub}>✓ Verra Gold Standard • 78% Target</Text>
                     </View>
 
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#00f2fe' }]}>14 Sites</Text>
-                      <Text style={styles.kpiTitle}>Marine Reef Protected</Text>
-                      <Text style={styles.kpiSubtitle}>Pulicat to Gulf of Mannar</Text>
+                    <View style={styles.whiteKpiCard}>
+                      <Text style={styles.whiteKpiLabel}>CORAL REEF PRESERVATION</Text>
+                      <Text style={[styles.whiteKpiVal, { color: '#0284c7' }]}>14 Reef Sites</Text>
+                      <View style={styles.whiteKpiProgressTrack}>
+                        <View style={[styles.whiteKpiProgressFill, { width: '92%', backgroundColor: '#0284c7' }]} />
+                      </View>
+                      <Text style={styles.whiteKpiSub}>De-Snagged Gulf of Mannar • {animalsSaved}+ Saved</Text>
                     </View>
 
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#fbbf24' }]}>92%</Text>
-                      <Text style={styles.kpiTitle}>Polymer Recycling Yield</Text>
-                      <Text style={styles.kpiSubtitle}>Kasimedu Mechanical Hub</Text>
+                    <View style={styles.whiteKpiCard}>
+                      <Text style={styles.whiteKpiLabel}>POLYMER UPCYCLING</Text>
+                      <Text style={[styles.whiteKpiVal, { color: '#d97706' }]}>92% Yield</Text>
+                      <View style={styles.whiteKpiProgressTrack}>
+                        <View style={[styles.whiteKpiProgressFill, { width: '92%', backgroundColor: '#d97706' }]} />
+                      </View>
+                      <Text style={styles.whiteKpiSub}>Kasimedu Granulation Hub • Pellet Grade A</Text>
                     </View>
                   </View>
                 </View>
@@ -845,57 +865,61 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
               {/* ============================================================== */}
               {activeTab === 'FISHERMAN_DATA' && (
                 <ScrollView style={styles.scrollTab} showsVerticalScrollIndicator={false}>
-                  {/* Header Bar */}
-                  <View style={styles.tabHeaderBar}>
+                  {/* Header Bar on White Background */}
+                  <View style={styles.whiteHeaderBar}>
                     <View>
-                      <Text style={styles.tabHeaderTitle}>
+                      <Text style={styles.whiteCanvasTitle}>
                         Fisherman Net Declarations & Direct Benefit Transfer (DBT)
                       </Text>
-                      <Text style={styles.tabHeaderSub}>
-                        Live Database • Kasimedu Coastal Pilot & Tamil Nadu Welfare Board
+                      <Text style={styles.whiteCanvasSub}>
+                        Tamil Nadu Marine Fisheries Dept. • Lost Gear Verification & Subsidy Scheme
                       </Text>
                     </View>
-                    <TouchableOpacity style={styles.exportBtn} onPress={handleExportCsv}>
-                      <Text style={styles.exportBtnText}>📥 Export DBT Audit CSV</Text>
+                    <TouchableOpacity style={styles.whiteExportBtn} onPress={handleExportCsv}>
+                      <Text style={styles.whiteExportBtnText}>📥 Export DBT Audit CSV</Text>
                     </TouchableOpacity>
                   </View>
 
-                  {/* 4 KPI Tiles (Calculated Live from Database) */}
-                  <View style={styles.kpiRow}>
-                    <View style={styles.kpiCard}>
-                      <Text style={styles.kpiValue}>{totalReportsCount}</Text>
-                      <Text style={styles.kpiTitle}>Total Declarations</Text>
-                      <Text style={styles.kpiSubtitle}>Logged in database</Text>
+                  {/* 4 Dark Navy KPI Cards on White Background Matching Screenshot 2 */}
+                  <View style={styles.darkKpiRow}>
+                    <View style={styles.darkKpiCard}>
+                      <Text style={styles.darkKpiLabel}>TOTAL DECLARATIONS</Text>
+                      <Text style={styles.darkKpiVal}>{totalReportsCount}</Text>
+                      <Text style={styles.darkKpiSub}>+18 logged this week • 96 Active Claims</Text>
                     </View>
 
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#f59e0b' }]}>
-                        {pendingReports.length}
+                    <View style={styles.darkKpiCard}>
+                      <Text style={styles.darkKpiLabel}>PENDING VERIFICATION</Text>
+                      <Text style={[styles.darkKpiVal, { color: '#f59e0b' }]}>
+                        {pendingReports.length}{' '}
+                        <Text style={{ fontSize: 13, color: '#f59e0b' }}>Urgent ({pendingReports.length})</Text>
                       </Text>
-                      <Text style={styles.kpiTitle}>Urgent Pending DBT</Text>
-                      <Text style={styles.kpiSubtitle}>Awaiting sonar confirmation</Text>
+                      <Text style={styles.darkKpiSub}>Awaiting Sonar Ping Sweep</Text>
                     </View>
 
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#00e475' }]}>
-                        ₹{totalDisbursedAmount.toLocaleString()}
+                    <View style={styles.darkKpiCard}>
+                      <Text style={styles.darkKpiLabel}>DBT DISBURSED (FY24-25)</Text>
+                      <Text style={[styles.darkKpiVal, { color: '#00e475' }]}>
+                        ₹{(totalDisbursedAmount / 100000).toFixed(1)}L{' '}
+                        <Text style={{ fontSize: 13, color: '#00e475' }}>94.2% Success</Text>
                       </Text>
-                      <Text style={styles.kpiTitle}>Total Disbursed</Text>
-                      <Text style={styles.kpiSubtitle}>Aadhaar-linked bank payout</Text>
+                      <Text style={styles.darkKpiSub}>PFMS Direct Credit Active</Text>
                     </View>
 
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#38bdf8' }]}>48 hrs</Text>
-                      <Text style={styles.kpiTitle}>Avg. Turnaround</Text>
-                      <Text style={styles.kpiSubtitle}>Declaration to DBT payout</Text>
+                    <View style={styles.darkKpiCard}>
+                      <Text style={styles.darkKpiLabel}>AVG PAYOUT TURNAROUND</Text>
+                      <Text style={[styles.darkKpiVal, { color: '#38bdf8' }]}>
+                        48h <Text style={{ fontSize: 13, color: '#38bdf8' }}>Optimal</Text>
+                      </Text>
+                      <Text style={styles.darkKpiSub}>-12h vs TN Benchmark • SLA Compliant</Text>
                     </View>
                   </View>
 
                   {/* Search & Filter Toolbar */}
-                  <View style={styles.filterToolbar}>
+                  <View style={styles.lightFilterToolbar}>
                     <TextInput
-                      style={styles.searchBar}
-                      placeholder="🔍 Search Token ID, Fisherman Name, Boat Tag, Area..."
+                      style={styles.lightSearchBar}
+                      placeholder="🔍 Search by Fisherman Name, Boat Tag (IND-TN-...)..."
                       placeholderTextColor="#64748b"
                       value={dbtSearchQuery}
                       onChangeText={setDbtSearchQuery}
@@ -905,21 +929,21 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                         <TouchableOpacity
                           key={filter}
                           style={[
-                            styles.filterPill,
-                            dbtFilter === filter && styles.filterPillActive
+                            styles.lightFilterPill,
+                            dbtFilter === filter && styles.lightFilterPillActive
                           ]}
                           onPress={() => setDbtFilter(filter)}
                         >
                           <Text
                             style={[
-                              styles.filterPillText,
-                              dbtFilter === filter && styles.filterPillTextActive
+                              styles.lightFilterPillText,
+                              dbtFilter === filter && styles.lightFilterPillTextActive
                             ]}
                           >
                             {filter === 'ALL'
-                              ? `All (${reports.length})`
+                              ? `All Declarations (${reports.length})`
                               : filter === 'PENDING'
-                              ? `Pending (${pendingReports.length})`
+                              ? `Pending Verification (${pendingReports.length})`
                               : `Disbursed (${disbursedReports.length})`}
                           </Text>
                         </TouchableOpacity>
@@ -927,17 +951,17 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                     </View>
                   </View>
 
-                  {/* Declarations & DBT Table */}
-                  <View style={styles.tableCard}>
-                    <View style={styles.tableHeaderRow}>
-                      <Text style={[styles.tableColHeader, { flex: 1.1 }]}>Token ID</Text>
-                      <Text style={[styles.tableColHeader, { flex: 1.4 }]}>Fisherman Name</Text>
-                      <Text style={[styles.tableColHeader, { flex: 1.4 }]}>Boat Reg No.</Text>
-                      <Text style={[styles.tableColHeader, { flex: 1.4 }]}>Loss Date & Area</Text>
-                      <Text style={[styles.tableColHeader, { flex: 1.6 }]}>Gear Type & Est.</Text>
-                      <Text style={[styles.tableColHeader, { flex: 1.6 }]}>Sonar Verification</Text>
-                      <Text style={[styles.tableColHeader, { flex: 1.4 }]}>DBT Payout</Text>
-                      <Text style={[styles.tableColHeader, { flex: 1.6, textAlign: 'right' }]}>
+                  {/* Declarations & DBT Table Matching Reference Screenshot 2 */}
+                  <View style={styles.darkTableCard}>
+                    <View style={styles.darkTableHeaderRow}>
+                      <Text style={[styles.darkTableColHeader, { flex: 1.1 }]}>Token ID</Text>
+                      <Text style={[styles.darkTableColHeader, { flex: 1.4 }]}>Fisherman & Aadhaar</Text>
+                      <Text style={[styles.darkTableColHeader, { flex: 1.4 }]}>Boat Tag & Type</Text>
+                      <Text style={[styles.darkTableColHeader, { flex: 1.4 }]}>Loss Date & Area</Text>
+                      <Text style={[styles.darkTableColHeader, { flex: 1.6 }]}>Gear Declared</Text>
+                      <Text style={[styles.darkTableColHeader, { flex: 1.5 }]}>Sonar Verification</Text>
+                      <Text style={[styles.darkTableColHeader, { flex: 1.4 }]}>DBT Payout</Text>
+                      <Text style={[styles.darkTableColHeader, { flex: 1.6, textAlign: 'right' }]}>
                         Action Protocol
                       </Text>
                     </View>
@@ -946,7 +970,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                       <View
                         key={item.id}
                         style={[
-                          styles.tableRow,
+                          styles.darkTableRow,
                           index % 2 === 1 && { backgroundColor: 'rgba(255,255,255,0.02)' }
                         ]}
                       >
@@ -975,7 +999,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                           <Text style={styles.tableCellSub}>{item.weight} kg</Text>
                         </View>
 
-                        <View style={{ flex: 1.6 }}>
+                        <View style={{ flex: 1.5 }}>
                           <TouchableOpacity
                             style={styles.sonarMatchPill}
                             onPress={() => {
@@ -1036,15 +1060,14 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                   </View>
 
                   {/* Bottom Policy Card */}
-                  <View style={styles.policyCard}>
-                    <Text style={styles.policyTitle}>
-                      📜 Tamil Nadu Marine Ghost Net Mitigation & DBT Scheme 2026
+                  <View style={styles.darkPolicyCard}>
+                    <Text style={styles.darkPolicyTitle}>
+                      Govt. of Tamil Nadu Direct Benefit Transfer (DBT) & Sonar Cross-Validation Policy
                     </Text>
-                    <Text style={styles.policyBody}>
-                      Direct benefit transfers are automatically credited into Aadhaar-linked bank
-                      accounts upon high-frequency (455kHz) acoustic confirmation. This incentive
-                      eliminates illegal abandonment and turns fishers into frontline marine
-                      conservation scouts.
+                    <Text style={styles.darkPolicyBody}>
+                      All lost gear declarations undergo acoustic bathymetric cross-checks (455kHz side-scan sonar). Once acoustic
+                      coordinates confirm derelict netting mass, direct subsidies are transferred within 48 hours directly into the Aadhaar-seeded
+                      bank account via Public Financial Management System (PFMS).
                     </Text>
                   </View>
                 </ScrollView>
@@ -1055,222 +1078,194 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
               {/* ============================================================== */}
               {activeTab === 'RESCUE_FLEET' && (
                 <ScrollView style={styles.scrollTab} showsVerticalScrollIndicator={false}>
-                  <View style={styles.tabHeaderBar}>
+                  <View style={styles.whiteHeaderBar}>
                     <View>
-                      <Text style={styles.tabHeaderTitle}>
-                        Active Marine Retrieval Fleet & AIS Telemetry
-                      </Text>
-                      <Text style={styles.tabHeaderSub}>
-                        Live Database • Sector: Bay of Bengal • Kasimedu Deep-Sea Operations Wing
+                      <Text style={styles.whiteCanvasTitle}>Active Marine Retrieval Fleet</Text>
+                      <Text style={styles.whiteCanvasSub}>
+                        TN Fisheries Dept • Real-time AIS & CHIRP Sonar Stream
                       </Text>
                     </View>
-                    <View style={styles.sonarLivePill}>
+                    <View style={styles.greenOnlinePill}>
                       <View style={styles.pulseDot} />
-                      <Text style={styles.sonarLiveText}>3 / 3 VESSELS ONLINE</Text>
+                      <Text style={styles.greenOnlineText}>3 / 3 VESSELS ONLINE</Text>
                     </View>
                   </View>
 
-                  {/* 4 Stat Tiles */}
-                  <View style={styles.kpiRow}>
-                    <View style={styles.kpiCard}>
-                      <Text style={styles.kpiValue}>3 / 3</Text>
-                      <Text style={styles.kpiTitle}>Active Fleet</Text>
-                      <Text style={styles.kpiSubtitle}>Vessels at sea</Text>
+                  {/* 4 Clean WHITE Stat Tiles on White Background Matching Screenshot 3 */}
+                  <View style={styles.whiteFleetStatRow}>
+                    <View style={styles.whiteFleetStatCard}>
+                      <Text style={styles.whiteFleetStatLabel}>ACTIVE AT SEA</Text>
+                      <Text style={styles.whiteFleetStatVal}>3 / 3</Text>
+                      <Text style={styles.whiteFleetStatSub}>3 in Harbor Readiness</Text>
                     </View>
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#00f2fe' }]}>100%</Text>
-                      <Text style={styles.kpiTitle}>Acoustic CHIRP</Text>
-                      <Text style={styles.kpiSubtitle}>Telemetry operational</Text>
+                    <View style={styles.whiteFleetStatCard}>
+                      <Text style={styles.whiteFleetStatLabel}>455KHZ SONAR</Text>
+                      <Text style={[styles.whiteFleetStatVal, { color: '#059669' }]}>100% ONLINE</Text>
+                      <Text style={styles.whiteFleetStatSub}>Dual-Freq Side-Scan Active</Text>
                     </View>
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#ffd166' }]}>5.0 T</Text>
-                      <Text style={styles.kpiTitle}>Deck Winch Load</Text>
-                      <Text style={styles.kpiSubtitle}>Hydraulic crane rating</Text>
+                    <View style={styles.whiteFleetStatCard}>
+                      <Text style={styles.whiteFleetStatLabel}>HYDRAULIC WINCH</Text>
+                      <Text style={[styles.whiteFleetStatVal, { color: '#0284c7' }]}>5-Ton Class</Text>
+                      <Text style={styles.whiteFleetStatSub}>Peak Capable: 5.8T Load</Text>
                     </View>
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#34d399' }]}>
-                        {missions.length || 3} Ops
+                    <View style={styles.whiteFleetStatCard}>
+                      <Text style={styles.whiteFleetStatLabel}>ACTIVE OPERATIONS</Text>
+                      <Text style={[styles.whiteFleetStatVal, { color: '#0f172a' }]}>
+                        {missions.length || 3} Active
                       </Text>
-                      <Text style={styles.kpiTitle}>Active Extractions</Text>
-                      <Text style={styles.kpiSubtitle}>Underway today</Text>
+                      <Text style={styles.whiteFleetStatSub}>Est. Haul: 4.8T Ghost Net</Text>
                     </View>
                   </View>
 
-                  {/* Vessel Grid */}
-                  <View style={styles.fleetGrid}>
+                  {/* 3 Clean WHITE Vessel Cards Matching Screenshot 3 */}
+                  <View style={styles.whiteVesselCardsList}>
                     {/* Vessel 1: Flagship */}
-                    <View style={[styles.vesselCard, styles.vesselCardHighlight]}>
-                      <View style={styles.vesselCardTop}>
-                        <View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={styles.vesselName}>⚓ RV Samudra Rakshak</Text>
-                            <View style={styles.flagshipPill}>
-                              <Text style={styles.flagshipPillText}>FLAGSHIP</Text>
+                    <View style={styles.whiteVesselCard}>
+                      <View style={styles.whiteVesselCardHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={{ fontSize: 20 }}>⚓</Text>
+                          <View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Text style={styles.whiteVesselName}>RV Samudra Rakshak</Text>
+                              <View style={styles.flagshipPill}>
+                                <Text style={styles.flagshipPillText}>FLAGSHIP</Text>
+                              </View>
                             </View>
+                            <Text style={styles.whiteVesselTag}>IND-TN-07-SP-0007 • Cmdr. K. Sudeep</Text>
                           </View>
-                          <Text style={styles.vesselTag}>IND-TN-07-SP-0007</Text>
                         </View>
-                        <View style={styles.statusActivePill}>
-                          <Text style={styles.statusActiveText}>🟢 ACTIVE EXTRACTION</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.vesselInfoGrid}>
-                        <View style={styles.vesselInfoItem}>
-                          <Text style={styles.vesselInfoLabel}>Commanding Officer</Text>
-                          <Text style={styles.vesselInfoVal}>Cmdr. K. Sudeep</Text>
-                        </View>
-                        <View style={styles.vesselInfoItem}>
-                          <Text style={styles.vesselInfoLabel}>Position</Text>
-                          <Text style={[styles.vesselInfoVal, { color: '#00f2fe' }]}>
-                            13.1245°N, 80.3120°E
-                          </Text>
-                        </View>
-                        <View style={styles.vesselInfoItem}>
-                          <Text style={styles.vesselInfoLabel}>Speed & Heading</Text>
-                          <Text style={styles.vesselInfoVal}>6.4 kts @ 042°</Text>
-                        </View>
-                        <View style={styles.vesselInfoItem}>
-                          <Text style={styles.vesselInfoLabel}>Equipped Gear</Text>
-                          <Text style={styles.vesselInfoVal}>Klein 4900 CHIRP + 5T Crane</Text>
+                        <View style={styles.missionCriticalBadge}>
+                          <Text style={styles.missionCriticalText}>● MISSION CRITICAL</Text>
                         </View>
                       </View>
 
-                      {/* Progress Bar */}
-                      <View style={styles.progressContainer}>
+                      <View style={styles.whiteVesselTelemetryRow}>
+                        <View style={styles.whiteTelemetryBox}>
+                          <Text style={styles.whiteTelemetryLabel}>POSITION</Text>
+                          <Text style={styles.whiteTelemetryVal}>13.1245°N, 80.3120°E</Text>
+                          <Text style={styles.whiteTelemetrySub}>Off Kasimedu (Sector B-4)</Text>
+                        </View>
+                        <View style={styles.whiteTelemetryBox}>
+                          <Text style={styles.whiteTelemetryLabel}>SPEED & HEADING</Text>
+                          <Text style={styles.whiteTelemetryVal}>6.4 kts @ 042°</Text>
+                          <Text style={styles.whiteTelemetrySub}>Engine: Diesel Hyd. 1200HP</Text>
+                        </View>
+                        <View style={styles.whiteTelemetryBox}>
+                          <Text style={styles.whiteTelemetryLabel}>EQUIPPED GEAR</Text>
+                          <Text style={styles.whiteTelemetryVal}>Klein 4900 CHIRP + 5T Crane</Text>
+                          <Text style={styles.whiteTelemetrySub}>Depth: 34m • Tension: OK</Text>
+                        </View>
+                      </View>
+
+                      {/* Mission Progress */}
+                      <View style={styles.whiteMissionProgressBox}>
                         <View style={styles.progressLabelRow}>
-                          <Text style={styles.progressText}>
-                            Current Mission: TN-NET-0891 Extraction
+                          <Text style={styles.whiteMissionLabel}>
+                            Current Mission: Hauling Target #TN-NET-0891 (1.8T Gillnet Snag)
                           </Text>
-                          <Text style={[styles.progressText, { color: '#00e475', fontWeight: 'bold' }]}>
-                            74%
+                          <Text style={[styles.whiteMissionLabel, { color: '#059669', fontWeight: 'bold' }]}>
+                            74% Recovered
                           </Text>
                         </View>
-                        <View style={styles.progressBarTrack}>
-                          <View style={[styles.progressBarFill, { width: '74%' }]} />
+                        <View style={styles.whiteProgressTrack}>
+                          <View style={[styles.whiteProgressFill, { width: '74%' }]} />
                         </View>
-                        <Text style={styles.etaText}>ETA Kasimedu Slipway: 16:30 IST</Text>
+                        <Text style={styles.whiteEtaText}>ETA Kasimedu Slipway: 16:30 IST</Text>
                       </View>
                     </View>
 
                     {/* Vessel 2 */}
-                    <View style={styles.vesselCard}>
-                      <View style={styles.vesselCardTop}>
-                        <View>
-                          <Text style={styles.vesselName}>⛵ RV Sagar Kanya II</Text>
-                          <Text style={styles.vesselTag}>IND-TN-01-RS-0042</Text>
+                    <View style={styles.whiteVesselCard}>
+                      <View style={styles.whiteVesselCardHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={{ fontSize: 20 }}>⛵</Text>
+                          <View>
+                            <Text style={styles.whiteVesselName}>RV Sagar Kanya II</Text>
+                            <Text style={styles.whiteVesselTag}>IND-TN-01-RS-0042 • Capt. M. Jayaraman</Text>
+                          </View>
                         </View>
-                        <View
-                          style={[
-                            styles.statusActivePill,
-                            {
-                              backgroundColor: 'rgba(56, 189, 248, 0.15)',
-                              borderColor: '#38bdf8'
-                            }
-                          ]}
-                        >
-                          <Text style={[styles.statusActiveText, { color: '#38bdf8' }]}>
-                            🔵 ACOUSTIC SURVEY
-                          </Text>
+                        <View style={[styles.missionCriticalBadge, { backgroundColor: '#e0f2fe', borderColor: '#38bdf8' }]}>
+                          <Text style={[styles.missionCriticalText, { color: '#0284c7' }]}>● ON PATROL</Text>
                         </View>
                       </View>
 
-                      <View style={styles.vesselInfoGrid}>
-                        <View style={styles.vesselInfoItem}>
-                          <Text style={styles.vesselInfoLabel}>Skipper</Text>
-                          <Text style={styles.vesselInfoVal}>Capt. M. Jayaraman</Text>
+                      <View style={styles.whiteVesselTelemetryRow}>
+                        <View style={styles.whiteTelemetryBox}>
+                          <Text style={styles.whiteTelemetryLabel}>POSITION</Text>
+                          <Text style={styles.whiteTelemetryVal}>13.2510°N, 80.3450°E</Text>
+                          <Text style={styles.whiteTelemetrySub}>Pulicat Coastal Shoals</Text>
                         </View>
-                        <View style={styles.vesselInfoItem}>
-                          <Text style={styles.vesselInfoLabel}>Position</Text>
-                          <Text style={[styles.vesselInfoVal, { color: '#00f2fe' }]}>
-                            13.2510°N, 80.3450°E
-                          </Text>
+                        <View style={styles.whiteTelemetryBox}>
+                          <Text style={styles.whiteTelemetryLabel}>SPEED & HEADING</Text>
+                          <Text style={styles.whiteTelemetryVal}>4.2 kts @ 180°</Text>
+                          <Text style={styles.whiteTelemetrySub}>Sea State: Calm</Text>
                         </View>
-                        <View style={styles.vesselInfoItem}>
-                          <Text style={styles.vesselInfoLabel}>Speed & Heading</Text>
-                          <Text style={styles.vesselInfoVal}>4.2 kts @ 180°</Text>
-                        </View>
-                        <View style={styles.vesselInfoItem}>
-                          <Text style={styles.vesselInfoLabel}>Equipped Gear</Text>
-                          <Text style={styles.vesselInfoVal}>EdgeTech 4125 Side-Scan</Text>
+                        <View style={styles.whiteTelemetryBox}>
+                          <Text style={styles.whiteTelemetryLabel}>EQUIPPED GEAR</Text>
+                          <Text style={styles.whiteTelemetryVal}>EdgeTech 4125 Side-Scan</Text>
+                          <Text style={styles.whiteTelemetrySub}>Grid Cleared: 38%</Text>
                         </View>
                       </View>
 
-                      <View style={styles.progressContainer}>
+                      <View style={styles.whiteMissionProgressBox}>
                         <View style={styles.progressLabelRow}>
-                          <Text style={styles.progressText}>Sweep Sector: Pulicat Shoal</Text>
-                          <Text style={[styles.progressText, { color: '#38bdf8', fontWeight: 'bold' }]}>
-                            38%
+                          <Text style={styles.whiteMissionLabel}>
+                            Sweep Sector: Pulicat Shoal Acoustic Anomalies
+                          </Text>
+                          <Text style={[styles.whiteMissionLabel, { color: '#0284c7', fontWeight: 'bold' }]}>
+                            38% Complete
                           </Text>
                         </View>
-                        <View style={styles.progressBarTrack}>
-                          <View
-                            style={[
-                              styles.progressBarFill,
-                              { width: '38%', backgroundColor: '#38bdf8' }
-                            ]}
-                          />
+                        <View style={styles.whiteProgressTrack}>
+                          <View style={[styles.whiteProgressFill, { width: '38%', backgroundColor: '#0284c7' }]} />
                         </View>
                       </View>
                     </View>
 
                     {/* Vessel 3 */}
-                    <View style={styles.vesselCard}>
-                      <View style={styles.vesselCardTop}>
-                        <View>
-                          <Text style={styles.vesselName}>🏗️ RV Meenavan Guard</Text>
-                          <Text style={styles.vesselTag}>IND-TN-07-SP-0012</Text>
+                    <View style={styles.whiteVesselCard}>
+                      <View style={styles.whiteVesselCardHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={{ fontSize: 20 }}>🏗️</Text>
+                          <View>
+                            <Text style={styles.whiteVesselName}>RV Meenavan Guard</Text>
+                            <Text style={styles.whiteVesselTag}>IND-TN-07-SP-0012 • Skipper R. Victor</Text>
+                          </View>
                         </View>
-                        <View
-                          style={[
-                            styles.statusActivePill,
-                            {
-                              backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                              borderColor: '#f59e0b'
-                            }
-                          ]}
-                        >
-                          <Text style={[styles.statusActiveText, { color: '#f59e0b' }]}>
-                            🟠 HEAVY HOIST
-                          </Text>
+                        <View style={[styles.missionCriticalBadge, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
+                          <Text style={[styles.missionCriticalText, { color: '#d97706' }]}>● HAUL READY</Text>
                         </View>
                       </View>
 
-                      <View style={styles.vesselInfoGrid}>
-                        <View style={styles.vesselInfoItem}>
-                          <Text style={styles.vesselInfoLabel}>Skipper</Text>
-                          <Text style={styles.vesselInfoVal}>Skipper R. Victor</Text>
+                      <View style={styles.whiteVesselTelemetryRow}>
+                        <View style={styles.whiteTelemetryBox}>
+                          <Text style={styles.whiteTelemetryLabel}>POSITION</Text>
+                          <Text style={styles.whiteTelemetryVal}>13.0820°N, 80.2980°E</Text>
+                          <Text style={styles.whiteTelemetrySub}>Marina Trench Outfall</Text>
                         </View>
-                        <View style={styles.vesselInfoItem}>
-                          <Text style={styles.vesselInfoLabel}>Position</Text>
-                          <Text style={[styles.vesselInfoVal, { color: '#00f2fe' }]}>
-                            13.0820°N, 80.2980°E
-                          </Text>
+                        <View style={styles.whiteTelemetryBox}>
+                          <Text style={styles.whiteTelemetryLabel}>SPEED & HEADING</Text>
+                          <Text style={styles.whiteTelemetryVal}>0.0 kts (Station)</Text>
+                          <Text style={styles.whiteTelemetrySub}>Engine: Station Keeping</Text>
                         </View>
-                        <View style={styles.vesselInfoItem}>
-                          <Text style={styles.vesselInfoLabel}>Speed & Heading</Text>
-                          <Text style={styles.vesselInfoVal}>0.0 kts (Station Keeping)</Text>
-                        </View>
-                        <View style={styles.vesselInfoItem}>
-                          <Text style={styles.vesselInfoLabel}>Equipped Gear</Text>
-                          <Text style={styles.vesselInfoVal}>Hydraulic Net Drum & Hook</Text>
+                        <View style={styles.whiteTelemetryBox}>
+                          <Text style={styles.whiteTelemetryLabel}>EQUIPPED GEAR</Text>
+                          <Text style={styles.whiteTelemetryVal}>Hydraulic Net Drum & Hook</Text>
+                          <Text style={styles.whiteTelemetrySub}>Capacity: 5.0T</Text>
                         </View>
                       </View>
 
-                      <View style={styles.progressContainer}>
+                      <View style={styles.whiteMissionProgressBox}>
                         <View style={styles.progressLabelRow}>
-                          <Text style={styles.progressText}>Current Mission: Trawl Net Hoist</Text>
-                          <Text style={[styles.progressText, { color: '#f59e0b', fontWeight: 'bold' }]}>
-                            88%
+                          <Text style={styles.whiteMissionLabel}>
+                            Current Mission: Submerged Trawl Net Hoist
+                          </Text>
+                          <Text style={[styles.whiteMissionLabel, { color: '#d97706', fontWeight: 'bold' }]}>
+                            88% Complete
                           </Text>
                         </View>
-                        <View style={styles.progressBarTrack}>
-                          <View
-                            style={[
-                              styles.progressBarFill,
-                              { width: '88%', backgroundColor: '#f59e0b' }
-                            ]}
-                          />
+                        <View style={styles.whiteProgressTrack}>
+                          <View style={[styles.whiteProgressFill, { width: '88%', backgroundColor: '#d97706' }]} />
                         </View>
                       </View>
                     </View>
@@ -1283,160 +1278,161 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
               {/* ============================================================== */}
               {activeTab === 'SUSTAINABLE_DATA' && (
                 <ScrollView style={styles.scrollTab} showsVerticalScrollIndicator={false}>
-                  <View style={styles.tabHeaderBar}>
+                  <View style={styles.whiteHeaderBar}>
                     <View>
-                      <Text style={styles.tabHeaderTitle}>
-                        Marine Ecosystem Recovery & Blue Carbon Metrics
+                      <Text style={styles.whiteCanvasTitle}>
+                        Marine Ecosystem Recovery & Blue Carbon Dashboard
                       </Text>
-                      <Text style={styles.tabHeaderSub}>
-                        Live Database • Tamil Nadu Coastal Biodiversity Protection Directorate
+                      <Text style={styles.whiteCanvasSub}>
+                        Official Government of Tamil Nadu de-snagged coral reef revitalization telemetry
                       </Text>
                     </View>
-                    <View style={[styles.sonarLivePill, { borderColor: '#10b981' }]}>
-                      <Text style={[styles.sonarLiveText, { color: '#10b981' }]}>
-                        VERRA VCS-2891 VERIFIED
-                      </Text>
+                    <View style={styles.greenOnlinePill}>
+                      <Text style={styles.greenOnlineText}>● VERRA VCS-2891 VERIFIED</Text>
                     </View>
                   </View>
 
-                  {/* 4 KPI Tiles (Calculated from Real Database Recoveries) */}
-                  <View style={styles.kpiRow}>
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#00e475' }]}>14 Sites</Text>
-                      <Text style={styles.kpiTitle}>Reefs & Shoals Cleared</Text>
-                      <Text style={styles.kpiSubtitle}>100% derelict net free</Text>
+                  {/* 4 Clean WHITE KPI Cards on White Background Matching Screenshot 4 */}
+                  <View style={styles.whiteFleetStatRow}>
+                    <View style={styles.whiteFleetStatCard}>
+                      <Text style={styles.whiteFleetStatLabel}>REEF SITES DE-SNAGGED</Text>
+                      <Text style={[styles.whiteFleetStatVal, { color: '#0f172a' }]}>14 Sites</Text>
+                      <Text style={styles.whiteFleetStatSub}>100% De-snagged coral reefs</Text>
                     </View>
 
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#38bdf8' }]}>
+                    <View style={styles.whiteFleetStatCard}>
+                      <Text style={styles.whiteFleetStatLabel}>MARINE FAUNA PROTECTED</Text>
+                      <Text style={[styles.whiteFleetStatVal, { color: '#0284c7' }]}>
                         {animalsSaved}+
                       </Text>
-                      <Text style={styles.kpiTitle}>Fauna Rescued</Text>
-                      <Text style={styles.kpiSubtitle}>Entangled marine life saved</Text>
+                      <Text style={styles.whiteFleetStatSub}>Zero Fatality • Triage tags active</Text>
                     </View>
 
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#34d399' }]}>
-                        {(co2eAvoidedKg / 1000).toFixed(1)} T
+                    <View style={styles.whiteFleetStatCard}>
+                      <Text style={styles.whiteFleetStatLabel}>TOTAL CARBON OFFSET</Text>
+                      <Text style={[styles.whiteFleetStatVal, { color: '#059669' }]}>
+                        {(co2eAvoidedKg / 1000).toFixed(1)} Tons CO₂e
                       </Text>
-                      <Text style={styles.kpiTitle}>CO₂e Avoided</Text>
-                      <Text style={styles.kpiSubtitle}>Blue carbon credit standard</Text>
+                      <Text style={styles.whiteFleetStatSub}>VCS Audited blue carbon</Text>
                     </View>
 
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#ffd166' }]}>+18.4%</Text>
-                      <Text style={styles.kpiTitle}>Seagrass Meadow Lift</Text>
-                      <Text style={styles.kpiSubtitle}>6-month benthic regrowth</Text>
+                    <View style={styles.whiteFleetStatCard}>
+                      <Text style={styles.whiteFleetStatLabel}>BENTHIC SEAGRASS REGROWTH</Text>
+                      <Text style={[styles.whiteFleetStatVal, { color: '#0f172a' }]}>+18.4%</Text>
+                      <Text style={styles.whiteFleetStatSub}>Density Lift • Gulf of Mannar</Text>
                     </View>
                   </View>
 
-                  {/* 2 Big Cards: Marine Fauna Census & Blue Carbon Registry */}
-                  <View style={styles.sustainGrid}>
-                    {/* Card 1: Reef Recovery */}
-                    <View style={styles.sustainCard}>
-                      <Text style={styles.sustainCardTitle}>
-                        🪸 Coral Reef & Benthic Habitat Restoration
+                  {/* 2 Big WHITE Cards on White Background Matching Screenshot 4 */}
+                  <View style={styles.whiteSustainGrid}>
+                    {/* Left Card: Coral Reef Restoration */}
+                    <View style={styles.whiteSustainCard}>
+                      <Text style={styles.whiteSustainTitle}>
+                        🪸 Coral Reef Restoration & Saved Species
                       </Text>
-                      <Text style={styles.sustainCardSub}>
-                        Continuous monitoring across 3 key Tamil Nadu bio-zones
+                      <Text style={styles.whiteSustainSub}>
+                        Live benthic restoration status across key Gulf of Mannar & Coromandel reefs
                       </Text>
 
-                      <View style={styles.siteStatusRow}>
-                        <View style={styles.siteBullet}>
-                          <Text style={styles.siteBulletName}>Pulicat Shoals Sanctuary</Text>
-                          <Text style={styles.siteBulletDesc}>
-                            4.2 km² surveyed • 6 gillnets lifted • Coral Health Index: 88/100 (+14%)
-                          </Text>
+                      <View style={styles.whiteReefSiteBox}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={styles.whiteReefName}>Pulicat Shoal Barrier</Text>
+                          <Text style={styles.whiteReefBadge}>100% De-snagged</Text>
                         </View>
-
-                        <View style={styles.siteBullet}>
-                          <Text style={styles.siteBulletName}>Kovalam Submerged Ridge</Text>
-                          <Text style={styles.siteBulletDesc}>
-                            3.1 km² cleared • 4 trawl nets removed • Biodiversity Index: 92/100
-                          </Text>
-                        </View>
-
-                        <View style={styles.siteBullet}>
-                          <Text style={styles.siteBulletName}>Gulf of Mannar Biosphere Corridor</Text>
-                          <Text style={styles.siteBulletDesc}>
-                            Dugong feeding meadows protected • Zero active ghost net snags
-                          </Text>
-                        </View>
+                        <Text style={styles.whiteReefCoords}>13°25'N, 80°20'E • 4.2 km² Area</Text>
+                        <Text style={styles.whiteReefStat}>Synthetic nets extracted: 2,180 kg • Health Index: 94%</Text>
                       </View>
 
-                      <Text style={[styles.sustainCardTitle, { marginTop: 18, fontSize: 14 }]}>
-                        Protected Marine Fauna Census
+                      <View style={styles.whiteReefSiteBox}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={styles.whiteReefName}>Kovalam Fringe Reef</Text>
+                          <Text style={[styles.whiteReefBadge, { color: '#0284c7', backgroundColor: '#e0f2fe' }]}>
+                            Active Acoustic Patrol
+                          </Text>
+                        </View>
+                        <Text style={styles.whiteReefCoords}>12°47'N, 80°15'E • Subsea Shelf</Text>
+                        <Text style={styles.whiteReefStat}>Heavy trawl wire cleared: 1,420 kg • Health Index: 91%</Text>
+                      </View>
+
+                      <View style={styles.whiteReefSiteBox}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={styles.whiteReefName}>Gulf of Mannar Marine Park</Text>
+                          <Text style={[styles.whiteReefBadge, { color: '#059669', backgroundColor: '#d1fae5' }]}>
+                            Zero Entanglement
+                          </Text>
+                        </View>
+                        <Text style={styles.whiteReefCoords}>09°12'N, 79°14'E • Biosphere Core</Text>
+                        <Text style={styles.whiteReefStat}>Ghost gear eradicated: 3,904 kg • Health Index: 89%</Text>
+                      </View>
+
+                      <Text style={[styles.whiteSustainTitle, { marginTop: 16, fontSize: 13 }]}>
+                        Tracked Marine Fauna Census
                       </Text>
-                      <View style={styles.faunaCensusGrid}>
-                        <View style={styles.faunaBox}>
-                          <Text style={{ fontSize: 24 }}>🐢</Text>
-                          <Text style={styles.faunaNumber}>182</Text>
-                          <Text style={styles.faunaLabel}>Olive Ridley Turtles</Text>
+                      <View style={styles.whiteFaunaGrid}>
+                        <View style={styles.whiteFaunaItem}>
+                          <Text style={{ fontSize: 22 }}>🐢</Text>
+                          <Text style={styles.whiteFaunaNum}>182</Text>
+                          <Text style={styles.whiteFaunaName}>Olive Ridley Turtles</Text>
                         </View>
-                        <View style={styles.faunaBox}>
-                          <Text style={{ fontSize: 24 }}>🐬</Text>
-                          <Text style={styles.faunaNumber}>14</Text>
-                          <Text style={styles.faunaLabel}>Dugongs & Dolphins</Text>
+                        <View style={styles.whiteFaunaItem}>
+                          <Text style={{ fontSize: 22 }}>🐬</Text>
+                          <Text style={styles.whiteFaunaNum}>14</Text>
+                          <Text style={styles.whiteFaunaName}>Dugongs & Dolphins</Text>
                         </View>
-                        <View style={styles.faunaBox}>
-                          <Text style={{ fontSize: 24 }}>🦈</Text>
-                          <Text style={styles.faunaNumber}>46</Text>
-                          <Text style={styles.faunaLabel}>Blacktip Reef Sharks</Text>
+                        <View style={styles.whiteFaunaItem}>
+                          <Text style={{ fontSize: 22 }}>🦈</Text>
+                          <Text style={styles.whiteFaunaNum}>46</Text>
+                          <Text style={styles.whiteFaunaName}>Blacktip Reef Sharks</Text>
                         </View>
-                        <View style={styles.faunaBox}>
-                          <Text style={{ fontSize: 24 }}>🪸</Text>
-                          <Text style={styles.faunaNumber}>2,400 m²</Text>
-                          <Text style={styles.faunaLabel}>Coral Structure</Text>
+                        <View style={styles.whiteFaunaItem}>
+                          <Text style={{ fontSize: 22 }}>🪸</Text>
+                          <Text style={styles.whiteFaunaNum}>2,400 m²</Text>
+                          <Text style={styles.whiteFaunaName}>Coral Restored</Text>
                         </View>
                       </View>
                     </View>
 
-                    {/* Card 2: Blue Carbon Credit Ledger */}
-                    <View style={styles.sustainCard}>
-                      <Text style={styles.sustainCardTitle}>
-                        📜 Verra VCS-2891 Blue Carbon Credit Ledger
+                    {/* Right Card: Blue Carbon Ledger */}
+                    <View style={styles.whiteSustainCard}>
+                      <Text style={styles.whiteSustainTitle}>
+                        📜 Blue Carbon Sequestration Registry
                       </Text>
-                      <Text style={styles.sustainCardSub}>
-                        Verified Carbon Standard & Polygon Smart Ledger Sync
+                      <Text style={styles.whiteSustainSub}>
+                        Verra Verified Carbon Standard (VCS) MRV pipeline & credit tokenization
                       </Text>
 
-                      <View style={styles.carbonLedgerBox}>
-                        <View style={styles.carbonRow}>
-                          <Text style={styles.carbonLabel}>Verified Reductions</Text>
-                          <Text style={styles.carbonVal}>
+                      <View style={styles.whiteCarbonBox}>
+                        <View style={styles.whiteCarbonRow}>
+                          <Text style={styles.whiteCarbonKey}>Verified Reductions</Text>
+                          <Text style={styles.whiteCarbonVal}>
                             {(co2eAvoidedKg / 1000).toFixed(1)} tCO₂e
                           </Text>
                         </View>
-                        <View style={styles.carbonRow}>
-                          <Text style={styles.carbonLabel}>Current Benchmark Price</Text>
-                          <Text style={styles.carbonVal}>$42.00 USD / tCO₂e</Text>
+                        <View style={styles.whiteCarbonRow}>
+                          <Text style={styles.whiteCarbonKey}>Current Benchmark Price</Text>
+                          <Text style={styles.whiteCarbonVal}>$42.00 USD / tCO₂e</Text>
                         </View>
-                        <View style={styles.carbonRow}>
-                          <Text style={styles.carbonLabel}>Total Realized Value</Text>
-                          <Text style={[styles.carbonVal, { color: '#00e475', fontSize: 18 }]}>
+                        <View style={styles.whiteCarbonRow}>
+                          <Text style={styles.whiteCarbonKey}>Total Realized Value</Text>
+                          <Text style={[styles.whiteCarbonVal, { color: '#059669', fontSize: 16 }]}>
                             ${(((co2eAvoidedKg / 1000) * 42.0) || 1377.6).toFixed(2)} USD (₹
                             {(Math.round(((co2eAvoidedKg / 1000) * 42.0 * 84) || 115700)).toLocaleString()})
                           </Text>
                         </View>
-                        <View style={styles.carbonRow}>
-                          <Text style={styles.carbonLabel}>Polygon Blockchain Hash</Text>
-                          <Text
-                            style={[
-                              styles.carbonVal,
-                              { fontFamily: 'monospace', fontSize: 11, color: '#38bdf8' }
-                            ]}
-                          >
+                        <View style={styles.whiteCarbonRow}>
+                          <Text style={styles.whiteCarbonKey}>Polygon Blockchain Hash</Text>
+                          <Text style={[styles.whiteCarbonVal, { color: '#0284c7', fontFamily: 'monospace', fontSize: 10 }]}>
                             0x7c9a812e...b34f981
                           </Text>
                         </View>
-                        <View style={styles.carbonRow}>
-                          <Text style={styles.carbonLabel}>Next Accreditation Audit</Text>
-                          <Text style={styles.carbonVal}>15 Nov 2026 by DNV GL Marine</Text>
+                        <View style={styles.whiteCarbonRow}>
+                          <Text style={styles.whiteCarbonKey}>Next Accreditation Audit</Text>
+                          <Text style={styles.whiteCarbonVal}>15 Nov 2026 by DNV GL Marine</Text>
                         </View>
                       </View>
 
-                      <View style={styles.auditStampBox}>
-                        <Text style={styles.auditStampText}>
+                      <View style={styles.whiteCarbonNotice}>
+                        <Text style={styles.whiteCarbonNoticeText}>
                           ✓ CERTIFIED BLUE CARBON CORRIDOR: Tamil Nadu Fisheries Dept. is officially authorized
                           to trade verified credits to fund local artisanal fisherman DBT programs.
                         </Text>
@@ -1451,182 +1447,198 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
               {/* ============================================================== */}
               {activeTab === 'RECYCLE_DATA' && (
                 <ScrollView style={styles.scrollTab} showsVerticalScrollIndicator={false}>
-                  <View style={styles.tabHeaderBar}>
+                  <View style={styles.whiteHeaderBar}>
                     <View>
-                      <Text style={styles.tabHeaderTitle}>
-                        Kasimedu Granulation Hub & Circular Polymer Supply Chain
+                      <Text style={styles.whiteCanvasTitle}>
+                        Ghost Net Granulation & Circular Supply Chain
                       </Text>
-                      <Text style={styles.tabHeaderSub}>
-                        Live Database • From Marine Ghost Net Scrap to Industrial Engineering Polymers
+                      <Text style={styles.whiteCanvasSub}>
+                        Official Government of Tamil Nadu closed-loop polymer recycling telemetry
                       </Text>
                     </View>
-                    <View style={[styles.sonarLivePill, { borderColor: '#38bdf8' }]}>
-                      <Text style={[styles.sonarLiveText, { color: '#38bdf8' }]}>
-                        HUB RECYCLE CAPACITY: 10T/DAY
-                      </Text>
+                    <View style={styles.whiteCapacityBadge}>
+                      <Text style={styles.whiteCapacityText}>HUB RECYCLE CAPACITY: 10T/DAY</Text>
                     </View>
                   </View>
 
-                  {/* 3 KPI Tiles */}
-                  <View style={styles.kpiRow}>
-                    <View style={styles.kpiCard}>
-                      <Text style={styles.kpiValue}>
-                        {(totalRecoveredKg / 1000).toFixed(1)} T
+                  {/* 3 Dark Navy KPI Cards on White Background Matching Screenshot 5 */}
+                  <View style={styles.darkKpiRow}>
+                    <View style={styles.darkKpiCard}>
+                      <Text style={styles.darkKpiLabel}>PRIMARY FEEDSTOCK INTAKE</Text>
+                      <Text style={styles.darkKpiVal}>
+                        {(totalRecoveredKg / 1000).toFixed(1)}{' '}
+                        <Text style={{ fontSize: 13, color: '#00f2fe' }}>Metric Tons</Text>
                       </Text>
-                      <Text style={styles.kpiTitle}>Total Net Scrap Ingested</Text>
-                      <Text style={styles.kpiSubtitle}>Recovered from Bay of Bengal</Text>
+                      <Text style={styles.darkKpiSub}>Recovered PA6, HDPE & PP Ghost Gear</Text>
                     </View>
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#00e475' }]}>92%</Text>
-                      <Text style={styles.kpiTitle}>Granulation Yield</Text>
-                      <Text style={styles.kpiSubtitle}>Mechanical efficiency rating</Text>
-                    </View>
-                    <View style={styles.kpiCard}>
-                      <Text style={[styles.kpiValue, { color: '#38bdf8' }]}>
-                        {((totalRecoveredKg * 0.92) / 1000).toFixed(1)} T
+
+                    <View style={styles.darkKpiCard}>
+                      <Text style={styles.darkKpiLabel}>MECHANICAL RECYCLING EFFICIENCY</Text>
+                      <Text style={[styles.darkKpiVal, { color: '#00e475' }]}>
+                        92%{' '}
+                        <Text style={{ fontSize: 13, color: '#00e475' }}>High Tensile</Text>
                       </Text>
-                      <Text style={styles.kpiTitle}>High-Grade Pellets Dispatched</Text>
-                      <Text style={styles.kpiSubtitle}>Delivered to tier-1 offtakers</Text>
+                      <Text style={styles.darkKpiSub}>Virgin-grade equivalence • Low melt flow</Text>
+                    </View>
+
+                    <View style={styles.darkKpiCard}>
+                      <Text style={styles.darkKpiLabel}>CIRCULAR INDUSTRIAL CONSUMPTION</Text>
+                      <Text style={[styles.darkKpiVal, { color: '#38bdf8' }]}>
+                        {((totalRecoveredKg * 0.92) / 1000).toFixed(1)}{' '}
+                        <Text style={{ fontSize: 13, color: '#38bdf8' }}>Tons</Text>
+                      </Text>
+                      <Text style={styles.darkKpiSub}>Automotive & precision moulding offtake</Text>
                     </View>
                   </View>
 
-                  {/* 4-Stage Mechanical Polymer Pipeline Diagram */}
-                  <View style={styles.pipelineCard}>
-                    <Text style={styles.pipelineCardTitle}>
-                      ⚙️ 4-Stage Mechanical Polymer Conversion Pipeline
+                  {/* 4-Stage Mechanical Polymer Pipeline Diagram (Clean White Cards) */}
+                  <View style={styles.whitePipelineContainer}>
+                    <Text style={styles.whitePipelineTitle}>
+                      ⚙️ Industrial Value Chain & Polymer Regeneration Pipeline
                     </Text>
-                    <View style={styles.pipelineStepsRow}>
-                      <View style={styles.pipelineStep}>
-                        <View style={styles.stepCircle}>
-                          <Text style={styles.stepNum}>1</Text>
+                    <View style={styles.whitePipelineStepsRow}>
+                      <View style={styles.whitePipelineCard}>
+                        <View style={styles.pipelineBadgeDone}>
+                          <Text style={styles.pipelineBadgeDoneTxt}>100% Completed</Text>
                         </View>
-                        <Text style={styles.stepName}>Desalination & Wash</Text>
-                        <Text style={styles.stepDesc}>
-                          Fresh water ultrasonic rinse, bio-fouling removal & salt dissolution
+                        <Text style={styles.whitePipelineStepName}>1. Desalination & Wash</Text>
+                        <Text style={styles.whitePipelineStepDesc}>
+                          Ultrasonic marine brine extraction & micro-algae removal
                         </Text>
                       </View>
 
-                      <Text style={styles.pipelineArrow}>➔</Text>
-
-                      <View style={styles.pipelineStep}>
-                        <View style={styles.stepCircle}>
-                          <Text style={styles.stepNum}>2</Text>
+                      <View style={styles.whitePipelineCard}>
+                        <View style={styles.pipelineBadgeDone}>
+                          <Text style={styles.pipelineBadgeDoneTxt}>100% Completed</Text>
                         </View>
-                        <Text style={styles.stepName}>Rotary Shredding</Text>
-                        <Text style={styles.stepDesc}>
-                          Dual-shaft high-torque shredder cutting HDPE & nylon into 8mm flakes
+                        <Text style={styles.whitePipelineStepName}>2. Shredding & Separation</Text>
+                        <Text style={styles.whitePipelineStepDesc}>
+                          High-density optical polymer sorting separating PA6 pure mesh
                         </Text>
                       </View>
 
-                      <Text style={styles.pipelineArrow}>➔</Text>
-
-                      <View style={styles.pipelineStep}>
-                        <View style={styles.stepCircle}>
-                          <Text style={styles.stepNum}>3</Text>
+                      {/* Stage 3 Highlighted with Cyan Border */}
+                      <View style={[styles.whitePipelineCard, styles.whitePipelineCardActive]}>
+                        <View style={styles.pipelineBadgeActive}>
+                          <Text style={styles.pipelineBadgeActiveTxt}>● Active / Compounding</Text>
                         </View>
-                        <Text style={styles.stepName}>Melt Extrusion 260°C</Text>
-                        <Text style={styles.stepDesc}>
-                          Twin-screw compounding extruder with vacuum degassing
+                        <Text style={styles.whitePipelineStepName}>3. Melt Extrusion 260°C</Text>
+                        <Text style={styles.whitePipelineStepDesc}>
+                          Twin-screw degassing thermal chamber eliminating micro-impurities
                         </Text>
                       </View>
 
-                      <Text style={styles.pipelineArrow}>➔</Text>
-
-                      <View style={styles.pipelineStep}>
-                        <View style={[styles.stepCircle, { backgroundColor: '#00e475' }]}>
-                          <Text style={[styles.stepNum, { color: '#030b14' }]}>4</Text>
+                      <View style={styles.whitePipelineCard}>
+                        <View style={styles.pipelineBadgeDone}>
+                          <Text style={styles.pipelineBadgeDoneTxt}>Hub Ready</Text>
                         </View>
-                        <Text style={styles.stepName}>Uniform Pellets</Text>
-                        <Text style={styles.stepDesc}>
-                          3mm recycled PP & PA-6 pellets ready for injection molding
+                        <Text style={styles.whitePipelineStepName}>4. High-Grade Granules</Text>
+                        <Text style={styles.whitePipelineStepDesc}>
+                          3mm uniform PA6 pellets ready for automotive injection moulding
                         </Text>
                       </View>
                     </View>
                   </View>
 
-                  {/* Industrial Offtake Partners Ledger */}
-                  <View style={styles.tableCard}>
-                    <View style={styles.tableHeaderRow}>
-                      <Text style={[styles.tableColHeader, { flex: 2 }]}>Industrial Offtake Partner</Text>
-                      <Text style={[styles.tableColHeader, { flex: 1.5 }]}>Quantity Dispatched</Text>
-                      <Text style={[styles.tableColHeader, { flex: 2 }]}>End-Use Product</Text>
-                      <Text style={[styles.tableColHeader, { flex: 1.5 }]}>Batch Status</Text>
+                  {/* Offtake Partners Ledger (Clean White Table on White Background) */}
+                  <View style={styles.whiteTableCard}>
+                    <View style={styles.whiteTableHeaderRow}>
+                      <Text style={[styles.whiteTableColHeader, { flex: 2 }]}>Industrial Offtake Partner</Text>
+                      <Text style={[styles.whiteTableColHeader, { flex: 1.5 }]}>Quantity Dispatched</Text>
+                      <Text style={[styles.whiteTableColHeader, { flex: 2 }]}>End-Use Product</Text>
+                      <Text style={[styles.whiteTableColHeader, { flex: 1.5 }]}>Batch Status</Text>
                     </View>
 
-                    <View style={styles.tableRow}>
+                    <View style={styles.whiteTableRow}>
                       <View style={{ flex: 2 }}>
-                        <Text style={styles.tableCellMain}>Hyundai Motor India (Sriperumbudur)</Text>
-                        <Text style={styles.tableCellSub}>Automotive Plastics Procurement</Text>
+                        <Text style={styles.whiteTableCellMain}>Hyundai Motor India (Sriperumbudur)</Text>
+                        <Text style={styles.whiteTableCellSub}>Automotive Plastics Procurement</Text>
                       </View>
                       <View style={{ flex: 1.5 }}>
-                        <Text style={[styles.tableCellMain, { color: '#00e475' }]}>6.2 Tonnes</Text>
+                        <Text style={[styles.whiteTableCellMain, { color: '#059669', fontWeight: '800' }]}>
+                          6.2 Tonnes
+                        </Text>
                       </View>
                       <View style={{ flex: 2 }}>
-                        <Text style={styles.tableCellMain}>Radiator Fan Shrouds & Underbody Trays</Text>
+                        <Text style={styles.whiteTableCellMain}>Radiator Fan Shrouds & Underbody Trays</Text>
                       </View>
                       <View style={{ flex: 1.5 }}>
-                        <Text style={[styles.tableCellMain, { color: '#00e475' }]}>✓ Dispatched</Text>
-                      </View>
-                    </View>
-
-                    <View style={[styles.tableRow, { backgroundColor: 'rgba(255,255,255,0.02)' }]}>
-                      <View style={{ flex: 2 }}>
-                        <Text style={styles.tableCellMain}>Mahindra Ocean-Grade Plastics</Text>
-                        <Text style={styles.tableCellSub}>Heavy Equipment Division</Text>
-                      </View>
-                      <View style={{ flex: 1.5 }}>
-                        <Text style={[styles.tableCellMain, { color: '#00e475' }]}>4.8 Tonnes</Text>
-                      </View>
-                      <View style={{ flex: 2 }}>
-                        <Text style={styles.tableCellMain}>Tractor Cabin Panels & Conduit Shells</Text>
-                      </View>
-                      <View style={{ flex: 1.5 }}>
-                        <Text style={[styles.tableCellMain, { color: '#00e475' }]}>✓ Dispatched</Text>
+                        <View style={styles.whiteStatusPillGreen}>
+                          <Text style={styles.whiteStatusPillGreenText}>✓ Dispatched</Text>
+                        </View>
                       </View>
                     </View>
 
-                    <View style={styles.tableRow}>
+                    <View style={[styles.whiteTableRow, { backgroundColor: '#f8fafc' }]}>
                       <View style={{ flex: 2 }}>
-                        <Text style={styles.tableCellMain}>Econyl Circular Textiles</Text>
-                        <Text style={styles.tableCellSub}>Sustainable Filament Spinning</Text>
+                        <Text style={styles.whiteTableCellMain}>Mahindra Ocean-Grade Plastics</Text>
+                        <Text style={styles.whiteTableCellSub}>Heavy Equipment Division</Text>
                       </View>
                       <View style={{ flex: 1.5 }}>
-                        <Text style={[styles.tableCellMain, { color: '#f59e0b' }]}>3.2 Tonnes</Text>
+                        <Text style={[styles.whiteTableCellMain, { color: '#059669', fontWeight: '800' }]}>
+                          4.8 Tonnes
+                        </Text>
                       </View>
                       <View style={{ flex: 2 }}>
-                        <Text style={styles.tableCellMain}>High-Tenacity Regenerated Nylon Yarn</Text>
+                        <Text style={styles.whiteTableCellMain}>Tractor Cabin Panels & Conduit Shells</Text>
                       </View>
                       <View style={{ flex: 1.5 }}>
-                        <Text style={[styles.tableCellMain, { color: '#f59e0b' }]}>⏳ Compounding</Text>
+                        <View style={styles.whiteStatusPillGreen}>
+                          <Text style={styles.whiteStatusPillGreenText}>✓ Dispatched</Text>
+                        </View>
                       </View>
                     </View>
 
-                    <View style={[styles.tableRow, { backgroundColor: 'rgba(255,255,255,0.02)' }]}>
+                    <View style={styles.whiteTableRow}>
                       <View style={{ flex: 2 }}>
-                        <Text style={styles.tableCellMain}>Sea2See Eyewear & Optics</Text>
-                        <Text style={styles.tableCellSub}>Recycled Marine Accessories</Text>
+                        <Text style={styles.whiteTableCellMain}>Econyl Circular Textiles</Text>
+                        <Text style={styles.whiteTableCellSub}>Sustainable Filament Spinning</Text>
                       </View>
                       <View style={{ flex: 1.5 }}>
-                        <Text style={[styles.tableCellMain, { color: '#00e475' }]}>1.4 Tonnes</Text>
+                        <Text style={[styles.whiteTableCellMain, { color: '#d97706', fontWeight: '800' }]}>
+                          3.2 Tonnes
+                        </Text>
                       </View>
                       <View style={{ flex: 2 }}>
-                        <Text style={styles.tableCellMain}>Polarized Sunglass Frames</Text>
+                        <Text style={styles.whiteTableCellMain}>High-Tenacity Regenerated Nylon Yarn</Text>
                       </View>
                       <View style={{ flex: 1.5 }}>
-                        <Text style={[styles.tableCellMain, { color: '#00e475' }]}>✓ Certified</Text>
+                        <View style={styles.whiteStatusPillAmber}>
+                          <Text style={styles.whiteStatusPillAmberText}>⏳ Compounding</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={[styles.whiteTableRow, { backgroundColor: '#f8fafc' }]}>
+                      <View style={{ flex: 2 }}>
+                        <Text style={styles.whiteTableCellMain}>Sea2See Eyewear & Optics</Text>
+                        <Text style={styles.whiteTableCellSub}>Recycled Marine Accessories</Text>
+                      </View>
+                      <View style={{ flex: 1.5 }}>
+                        <Text style={[styles.whiteTableCellMain, { color: '#059669', fontWeight: '800' }]}>
+                          1.4 Tonnes
+                        </Text>
+                      </View>
+                      <View style={{ flex: 2 }}>
+                        <Text style={styles.whiteTableCellMain}>Polarized Sunglass Frames</Text>
+                      </View>
+                      <View style={{ flex: 1.5 }}>
+                        <View style={styles.whiteStatusPillGreen}>
+                          <Text style={styles.whiteStatusPillGreenText}>✓ Certified</Text>
+                        </View>
                       </View>
                     </View>
                   </View>
 
-                  {/* Material Batch Certificate Card */}
-                  <View style={styles.certCard}>
+                  {/* Dark Certificate Card at Bottom Matching Screenshot 5 */}
+                  <View style={styles.darkCertificateCard}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                       <Text style={{ fontSize: 24 }}>🎖️</Text>
                       <View>
-                        <Text style={styles.certTitle}>
+                        <Text style={styles.darkCertTitle}>
                           Polymer Quality Certificate: TN-POLY-2026-KM-089
                         </Text>
-                        <Text style={styles.certSub}>
+                        <Text style={styles.darkCertSub}>
                           Tensile Modulus: 1.45 GPa • Melt Flow Index: 12 g/10min • Polymer Purity: 99.2%
                         </Text>
                       </View>
@@ -1784,12 +1796,12 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
 };
 
 // -------------------------------------------------------------------------
-// STYLES: Tamil Nadu Fisheries Admin Command Center UI
+// STYLES: High-Contrast Oceanic White Workspace + Dark Navy Command Bar
 // -------------------------------------------------------------------------
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#07121e',
+    backgroundColor: '#f8fafc',
     width: '100%',
     height: '100%',
     display: 'flex',
@@ -1799,18 +1811,19 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12
+    gap: 12,
+    backgroundColor: '#f8fafc'
   },
   loadingText: {
-    color: '#00f2fe',
+    color: '#0284c7',
     fontSize: 14,
     fontWeight: '700'
   },
 
-  // Top Header Bar
+  // Top Header Bar (Dark Navy #0a121c)
   topHeader: {
     height: 60,
-    backgroundColor: '#060f19',
+    backgroundColor: '#0a121c',
     borderBottomWidth: 1,
     borderBottomColor: '#162a45',
     flexDirection: 'row',
@@ -1951,10 +1964,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row'
   },
 
-  // Sidebar
+  // Sidebar (Dark Navy #0c1523)
   sidebar: {
-    width: 220,
-    backgroundColor: '#060f19',
+    width: 210,
+    backgroundColor: '#0c1523',
     borderRightWidth: 1,
     borderRightColor: '#162a45',
     display: 'flex',
@@ -1984,9 +1997,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent'
   },
   navItemActive: {
-    backgroundColor: '#0d2238',
-    borderLeftWidth: 3,
-    borderLeftColor: '#00f2fe'
+    backgroundColor: '#00f2fe',
+    shadowColor: '#00f2fe',
+    shadowOpacity: 0.3,
+    shadowRadius: 8
   },
   navIcon: {
     fontSize: 16
@@ -1998,11 +2012,11 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   navLabelActive: {
-    color: '#f8fafc',
-    fontWeight: '800'
+    color: '#030b14',
+    fontWeight: '900'
   },
   navBadge: {
-    backgroundColor: '#0c4a6e',
+    backgroundColor: '#1e3a5f',
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 10
@@ -2036,35 +2050,48 @@ const styles = StyleSheet.create({
     fontSize: 9
   },
 
-  // Content Area
+  // Main Content Area (Clean White #f8fafc / #ffffff)
   contentArea: {
     flex: 1,
-    backgroundColor: '#07121e'
+    backgroundColor: '#f8fafc'
   },
   fullScreenTab: {
     flex: 1,
-    padding: 14,
+    padding: 16,
     gap: 12
   },
   scrollTab: {
     flex: 1,
-    padding: 14
+    padding: 16
   },
-  tabHeaderBar: {
+
+  // White Canvas Typography
+  whiteCanvasTitle: {
+    color: '#0f172a',
+    fontSize: 19,
+    fontWeight: '900'
+  },
+  whiteCanvasSub: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 2
+  },
+  whiteHeaderBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14
+    marginBottom: 16
   },
-  tabHeaderTitle: {
-    color: '#f8fafc',
-    fontSize: 18,
-    fontWeight: '800'
+  whiteExportBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 6
   },
-  tabHeaderSub: {
-    color: '#94a3b8',
+  whiteExportBtnText: {
+    color: '#ffffff',
     fontSize: 12,
-    marginTop: 2
+    fontWeight: '800'
   },
 
   // Map Workspace
@@ -2072,14 +2099,14 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     gap: 12,
-    minHeight: 380
+    minHeight: 390
   },
   mapFrameWrapper: {
     flex: 1.8,
-    backgroundColor: '#061320',
+    backgroundColor: '#081d33',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1e3a5f',
+    borderColor: '#cbd5e1',
     position: 'relative',
     overflow: 'hidden'
   },
@@ -2117,10 +2144,10 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
 
-  // Target Details Card (Right Flyout)
+  // Target Details Card (Dark Navy on Right of Map)
   targetDetailsCard: {
     flex: 1.1,
-    backgroundColor: '#0a192c',
+    backgroundColor: '#0a1728',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1e3a5f',
@@ -2233,115 +2260,153 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
 
-  // KPI Row
-  kpiRow: {
+  // Clean WHITE KPI Cards on White Canvas (Screen 1 Matching Reference)
+  whiteKpiRow: {
     flexDirection: 'row',
     gap: 12
   },
-  kpiCard: {
+  whiteKpiCard: {
     flex: 1,
-    backgroundColor: '#0a192c',
+    backgroundColor: '#ffffff',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1e3a5f',
-    padding: 14
+    borderColor: '#e2e8f0',
+    padding: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2
   },
-  kpiValue: {
-    color: '#00f2fe',
-    fontSize: 22,
-    fontWeight: '900'
-  },
-  kpiTitle: {
-    color: '#f8fafc',
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 4
-  },
-  kpiSubtitle: {
+  whiteKpiLabel: {
     color: '#64748b',
     fontSize: 10,
-    marginTop: 2
+    fontWeight: '800',
+    letterSpacing: 0.6
+  },
+  whiteKpiVal: {
+    color: '#0f172a',
+    fontSize: 22,
+    fontWeight: '900',
+    marginVertical: 4
+  },
+  whiteKpiProgressTrack: {
+    height: 4,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginVertical: 6
+  },
+  whiteKpiProgressFill: {
+    height: '100%',
+    backgroundColor: '#0284c7',
+    borderRadius: 2
+  },
+  whiteKpiSub: {
+    color: '#64748b',
+    fontSize: 10
   },
 
-  // Fisherman Data View Styles
-  exportBtn: {
-    backgroundColor: '#0284c7',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6
+  // Dark Navy KPI Cards on White Background (Screen 2 & Screen 5 Matching Reference)
+  darkKpiRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16
   },
-  exportBtnText: {
+  darkKpiCard: {
+    flex: 1,
+    backgroundColor: '#0a1420',
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#1e3a5f'
+  },
+  darkKpiLabel: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6
+  },
+  darkKpiVal: {
     color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '800'
+    fontSize: 24,
+    fontWeight: '900',
+    marginVertical: 4
   },
-  filterToolbar: {
+  darkKpiSub: {
+    color: '#64748b',
+    fontSize: 10
+  },
+
+  // Fisherman Data Light Filter Toolbar
+  lightFilterToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginVertical: 12
+    marginBottom: 14
   },
-  searchBar: {
+  lightSearchBar: {
     flex: 1,
-    backgroundColor: '#061320',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#1e3a5f',
+    borderColor: '#cbd5e1',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    color: '#f8fafc',
+    paddingVertical: 9,
+    color: '#0f172a',
     fontSize: 12
   },
   filterPills: {
     flexDirection: 'row',
     gap: 6
   },
-  filterPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+  lightFilterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 6,
-    backgroundColor: '#0d2238',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#1e3a5f'
+    borderColor: '#cbd5e1'
   },
-  filterPillActive: {
+  lightFilterPillActive: {
     backgroundColor: '#0284c7',
-    borderColor: '#38bdf8'
+    borderColor: '#0284c7'
   },
-  filterPillText: {
-    color: '#94a3b8',
+  lightFilterPillText: {
+    color: '#64748b',
     fontSize: 11,
     fontWeight: '700'
   },
-  filterPillTextActive: {
+  lightFilterPillTextActive: {
     color: '#ffffff'
   },
-  tableCard: {
-    backgroundColor: '#0a192c',
+
+  // Dark Table Container on White Canvas (Screen 2 Matching Reference)
+  darkTableCard: {
+    backgroundColor: '#0c1624',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1e3a5f',
     overflow: 'hidden',
-    marginBottom: 14
+    marginBottom: 16
   },
-  tableHeaderRow: {
+  darkTableHeaderRow: {
     flexDirection: 'row',
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: '#061320',
+    paddingVertical: 11,
+    backgroundColor: '#06101c',
     borderBottomWidth: 1,
     borderBottomColor: '#1e3a5f'
   },
-  tableColHeader: {
+  darkTableColHeader: {
     color: '#94a3b8',
     fontSize: 11,
     fontWeight: '800'
   },
-  tableRow: {
+  darkTableRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(30, 58, 95, 0.4)'
   },
@@ -2396,324 +2461,489 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800'
   },
-  policyCard: {
-    backgroundColor: '#0d2238',
+  darkPolicyCard: {
+    backgroundColor: '#0c1624',
     borderRadius: 8,
     borderLeftWidth: 4,
     borderLeftColor: '#00f2fe',
-    padding: 12,
+    padding: 14,
     marginBottom: 20
   },
-  policyTitle: {
+  darkPolicyTitle: {
     color: '#00f2fe',
     fontSize: 12,
     fontWeight: '800'
   },
-  policyBody: {
+  darkPolicyBody: {
     color: '#94a3b8',
     fontSize: 11,
     marginTop: 4,
     lineHeight: 16
   },
 
-  // Rescue Fleet View Styles
-  fleetGrid: {
-    gap: 12,
-    marginTop: 14
+  // Rescue Fleet View Styles (Clean White on White Canvas Matching Screenshot 3)
+  greenOnlinePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#d1fae5',
+    borderWidth: 1,
+    borderColor: '#059669',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20
   },
-  vesselCard: {
-    backgroundColor: '#0a192c',
+  greenOnlineText: {
+    color: '#059669',
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  whiteFleetStatRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16
+  },
+  whiteFleetStatCard: {
+    flex: 1,
+    backgroundColor: '#ffffff',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1e3a5f',
-    padding: 14
+    borderColor: '#e2e8f0',
+    padding: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2
   },
-  vesselCardHighlight: {
-    borderColor: '#00f2fe'
+  whiteFleetStatLabel: {
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6
   },
-  vesselCardTop: {
+  whiteFleetStatVal: {
+    color: '#0f172a',
+    fontSize: 22,
+    fontWeight: '900',
+    marginVertical: 4
+  },
+  whiteFleetStatSub: {
+    color: '#64748b',
+    fontSize: 10
+  },
+  whiteVesselCardsList: {
+    gap: 14
+  },
+  whiteVesselCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2
+  },
+  whiteVesselCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start'
   },
-  vesselName: {
-    color: '#f8fafc',
+  whiteVesselName: {
+    color: '#0f172a',
     fontSize: 16,
-    fontWeight: '800'
+    fontWeight: '900'
   },
-  vesselTag: {
-    color: '#38bdf8',
+  whiteVesselTag: {
+    color: '#64748b',
     fontSize: 11,
-    marginTop: 2,
-    fontWeight: '600'
+    marginTop: 2
   },
   flagshipPill: {
-    backgroundColor: 'rgba(0, 242, 254, 0.15)',
+    backgroundColor: '#e0f2fe',
     borderWidth: 1,
-    borderColor: '#00f2fe',
+    borderColor: '#38bdf8',
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4
   },
   flagshipPillText: {
-    color: '#00f2fe',
+    color: '#0284c7',
     fontSize: 9,
     fontWeight: '900'
   },
-  statusActivePill: {
-    backgroundColor: 'rgba(0, 228, 117, 0.15)',
+  missionCriticalBadge: {
+    backgroundColor: '#fee2e2',
     borderWidth: 1,
-    borderColor: '#00e475',
+    borderColor: '#ef4444',
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 6
   },
-  statusActiveText: {
-    color: '#00e475',
+  missionCriticalText: {
+    color: '#b91c1c',
     fontSize: 10,
     fontWeight: '800'
   },
-  vesselInfoGrid: {
+  whiteVesselTelemetryRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 12,
-    marginTop: 12,
-    backgroundColor: '#061320',
-    padding: 10,
-    borderRadius: 6
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginVertical: 12
   },
-  vesselInfoItem: {
-    flex: 1,
-    minWidth: 140
+  whiteTelemetryBox: {
+    flex: 1
   },
-  vesselInfoLabel: {
+  whiteTelemetryLabel: {
     color: '#64748b',
     fontSize: 9,
-    fontWeight: '700'
+    fontWeight: '800'
   },
-  vesselInfoVal: {
-    color: '#f8fafc',
-    fontSize: 11,
-    fontWeight: '700',
+  whiteTelemetryVal: {
+    color: '#0f172a',
+    fontSize: 12,
+    fontWeight: '800',
     marginTop: 2
   },
-  progressContainer: {
-    marginTop: 12
+  whiteTelemetrySub: {
+    color: '#94a3b8',
+    fontSize: 10,
+    marginTop: 1
+  },
+  whiteMissionProgressBox: {
+    gap: 4
   },
   progressLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 4
   },
-  progressText: {
-    color: '#94a3b8',
-    fontSize: 11
+  whiteMissionLabel: {
+    color: '#0f172a',
+    fontSize: 11,
+    fontWeight: '600'
   },
-  progressBarTrack: {
+  whiteProgressTrack: {
     height: 6,
-    backgroundColor: '#162a45',
+    backgroundColor: '#e2e8f0',
     borderRadius: 3,
     overflow: 'hidden'
   },
-  progressBarFill: {
+  whiteProgressFill: {
     height: '100%',
-    backgroundColor: '#00e475',
+    backgroundColor: '#059669',
     borderRadius: 3
   },
-  etaText: {
+  whiteEtaText: {
     color: '#64748b',
     fontSize: 10,
     marginTop: 4
   },
 
-  // Sustainable Data View Styles
-  sustainGrid: {
+  // Sustainable Data View (Screen 4 Matching Reference)
+  whiteSustainGrid: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 14
+    gap: 14
   },
-  sustainCard: {
+  whiteSustainCard: {
     flex: 1,
-    backgroundColor: '#0a192c',
+    backgroundColor: '#ffffff',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1e3a5f',
-    padding: 14
+    borderColor: '#e2e8f0',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2
   },
-  sustainCardTitle: {
-    color: '#f8fafc',
+  whiteSustainTitle: {
+    color: '#0f172a',
     fontSize: 15,
-    fontWeight: '800'
+    fontWeight: '900'
   },
-  sustainCardSub: {
-    color: '#94a3b8',
+  whiteSustainSub: {
+    color: '#64748b',
     fontSize: 11,
     marginTop: 2,
     marginBottom: 12
   },
-  siteStatusRow: {
-    gap: 8
-  },
-  siteBullet: {
-    backgroundColor: '#061320',
+  whiteReefSiteBox: {
+    backgroundColor: '#f8fafc',
     padding: 10,
     borderRadius: 6,
-    borderLeftWidth: 3,
-    borderLeftColor: '#00e475'
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 8
   },
-  siteBulletName: {
-    color: '#00e475',
+  whiteReefName: {
+    color: '#0f172a',
     fontSize: 12,
     fontWeight: '800'
   },
-  siteBulletDesc: {
-    color: '#94a3b8',
-    fontSize: 11,
+  whiteReefBadge: {
+    backgroundColor: '#d1fae5',
+    color: '#059669',
+    fontSize: 10,
+    fontWeight: '800',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4
+  },
+  whiteReefCoords: {
+    color: '#64748b',
+    fontSize: 10,
     marginTop: 2
   },
-  faunaCensusGrid: {
+  whiteReefStat: {
+    color: '#0f172a',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2
+  },
+  whiteFaunaGrid: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 10
+    marginTop: 8
   },
-  faunaBox: {
+  whiteFaunaItem: {
     flex: 1,
-    backgroundColor: '#061320',
-    padding: 10,
+    backgroundColor: '#f8fafc',
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 10,
     alignItems: 'center'
   },
-  faunaNumber: {
-    color: '#00f2fe',
+  whiteFaunaNum: {
+    color: '#0284c7',
     fontSize: 16,
     fontWeight: '900',
     marginTop: 4
   },
-  faunaLabel: {
-    color: '#94a3b8',
+  whiteFaunaName: {
+    color: '#64748b',
     fontSize: 9,
     textAlign: 'center',
     marginTop: 2
   },
-  carbonLedgerBox: {
-    backgroundColor: '#061320',
+  whiteCarbonBox: {
+    backgroundColor: '#f8fafc',
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     padding: 12,
     gap: 10
   },
-  carbonRow: {
+  whiteCarbonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(30, 58, 95, 0.4)',
+    borderBottomColor: '#e2e8f0',
     paddingBottom: 6
   },
-  carbonLabel: {
-    color: '#94a3b8',
+  whiteCarbonKey: {
+    color: '#64748b',
     fontSize: 11
   },
-  carbonVal: {
-    color: '#f8fafc',
+  whiteCarbonVal: {
+    color: '#0f172a',
     fontSize: 12,
     fontWeight: '800'
   },
-  auditStampBox: {
-    marginTop: 12,
-    backgroundColor: 'rgba(0, 228, 117, 0.1)',
+  whiteCarbonNotice: {
+    marginTop: 14,
+    backgroundColor: '#f0fdf4',
     borderWidth: 1,
-    borderColor: '#00e475',
+    borderColor: '#059669',
     padding: 10,
     borderRadius: 6
   },
-  auditStampText: {
-    color: '#00e475',
+  whiteCarbonNoticeText: {
+    color: '#059669',
     fontSize: 10,
     lineHeight: 14
   },
 
-  // Recycle Data View Styles
-  pipelineCard: {
-    backgroundColor: '#0a192c',
+  // Recycle Data View (Screen 5 Matching Reference)
+  whiteCapacityBadge: {
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#38bdf8',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6
+  },
+  whiteCapacityText: {
+    color: '#0284c7',
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  whitePipelineContainer: {
+    backgroundColor: '#ffffff',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1e3a5f',
-    padding: 14,
-    marginVertical: 14
+    borderColor: '#e2e8f0',
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2
   },
-  pipelineCardTitle: {
-    color: '#f8fafc',
+  whitePipelineTitle: {
+    color: '#0f172a',
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '900',
     marginBottom: 14
   },
-  pipelineStepsRow: {
+  whitePipelineStepsRow: {
+    flexDirection: 'row',
+    gap: 10
+  },
+  whitePipelineCard: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12
+  },
+  whitePipelineCardActive: {
+    borderColor: '#00f2fe',
+    borderWidth: 2,
+    backgroundColor: '#ffffff'
+  },
+  pipelineBadgeDone: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 8
+  },
+  pipelineBadgeDoneTxt: {
+    color: '#059669',
+    fontSize: 9,
+    fontWeight: '800'
+  },
+  pipelineBadgeActive: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e0f2fe',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 8
+  },
+  pipelineBadgeActiveTxt: {
+    color: '#0284c7',
+    fontSize: 9,
+    fontWeight: '800'
+  },
+  whitePipelineStepName: {
+    color: '#0f172a',
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  whitePipelineStepDesc: {
+    color: '#64748b',
+    fontSize: 10,
+    marginTop: 4,
+    lineHeight: 14
+  },
+  whiteTableCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2
+  },
+  whiteTableHeaderRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#f1f5f9',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0'
+  },
+  whiteTableColHeader: {
+    color: '#475569',
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  whiteTableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
   },
-  pipelineStep: {
-    flex: 1,
-    backgroundColor: '#061320',
-    borderRadius: 8,
-    padding: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#1e3a5f'
-  },
-  stepCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#0284c7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6
-  },
-  stepNum: {
-    color: '#ffffff',
+  whiteTableCellMain: {
+    color: '#0f172a',
     fontSize: 12,
-    fontWeight: '900'
+    fontWeight: '600'
   },
-  stepName: {
-    color: '#00f2fe',
-    fontSize: 11,
-    fontWeight: '800',
-    textAlign: 'center'
+  whiteTableCellSub: {
+    color: '#64748b',
+    fontSize: 10,
+    marginTop: 2
   },
-  stepDesc: {
-    color: '#94a3b8',
-    fontSize: 9,
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 12
+  whiteStatusPillGreen: {
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    alignSelf: 'flex-start'
   },
-  pipelineArrow: {
-    color: '#38bdf8',
-    fontSize: 18,
-    fontWeight: 'bold'
+  whiteStatusPillGreenText: {
+    color: '#059669',
+    fontSize: 10,
+    fontWeight: '800'
   },
-  certCard: {
-    backgroundColor: '#0d2238',
+  whiteStatusPillAmber: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    alignSelf: 'flex-start'
+  },
+  whiteStatusPillAmberText: {
+    color: '#d97706',
+    fontSize: 10,
+    fontWeight: '800'
+  },
+  darkCertificateCard: {
+    backgroundColor: '#0a1420',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#00e475',
-    padding: 12,
+    borderColor: '#059669',
+    padding: 14,
     marginBottom: 20
   },
-  certTitle: {
+  darkCertTitle: {
     color: '#00e475',
     fontSize: 12,
     fontWeight: '800'
   },
-  certSub: {
+  darkCertSub: {
     color: '#94a3b8',
     fontSize: 10,
     marginTop: 2
   },
 
-  // Voucher Modal
+  // Modal Styles
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(3, 11, 20, 0.85)',
