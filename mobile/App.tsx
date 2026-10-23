@@ -13,6 +13,7 @@ import {
   Linking
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { PASS_BASE64_IMAGES } from './passes_base64';
 
 // Local asset bundled directly inside the mobile app
 const LOGO_IMG = require('./assets/logo.png');
@@ -4907,7 +4908,7 @@ export default function App() {
             position: 'relative'
           }}>
             <Image
-              source={PASS_IMAGES[currentSurveyPass] || SONAR_IMG}
+              source={{ uri: PASS_BASE64_IMAGES[currentSurveyPass] || PASS_BASE64_IMAGES[8] }}
               resizeMode="contain"
               style={{
                 position: 'absolute',
