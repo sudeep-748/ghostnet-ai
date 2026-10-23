@@ -1328,7 +1328,7 @@ export default function App() {
               }
             } catch (e) {}
 
-            // B. Map into Fisherman's Reports Tracker
+            // B. Map into Fisherman's Reports Tracker (Real-Time 3-Stage Synchronization)
             const mappedReports: RecoveryReport[] = liveReports.map((r: any, idx: number) => {
               const repId = r.client_report_id || r.id || `rep-${idx}`;
               let reporterName = r.reporter_name;
@@ -1356,14 +1356,42 @@ export default function App() {
               const reportDate = r.loss_time || r.created_at;
               const timeStr = formatRelativeTime(reportDate, language);
 
+              // Comprehensive Mission Matching across IDs, Client IDs, and prefixes
+              const matchMission = (m: any) => {
+                if (!m || !m.report_id) return false;
+                const mRep = String(m.report_id).toLowerCase().trim();
+                const rId = String(r.id || '').toLowerCase().trim();
+                const cId = String(r.client_report_id || '').toLowerCase().trim();
+                const repIdClean = String(repId || '').toLowerCase().trim();
+                const repTgt = repIdClean.replace(/^rep-/, 'tgt-');
+                const repRep = repIdClean.replace(/^tgt-/, 'rep-');
+
+                return (
+                  mRep === rId ||
+                  mRep === cId ||
+                  mRep === repIdClean ||
+                  mRep === repTgt ||
+                  mRep === repRep ||
+                  (cId && mRep === cId.replace(/^rep-/, 'tgt-')) ||
+                  (cId && mRep === cId.replace(/^tgt-/, 'rep-'))
+                );
+              };
+
+              const activeM = Array.isArray(allMissions)
+                ? allMissions.find((m: any) => matchMission(m) && (m.status === 'active' || m.status === 'in_progress'))
+                : null;
+              const completedM = Array.isArray(allMissions)
+                ? allMissions.find((m: any) => matchMission(m) && m.status === 'completed')
+                : null;
+
               const isLocallyCompleted =
                 completedTargetIds.includes(r.id) ||
                 (repId && completedTargetIds.includes(repId)) ||
-                completedTargetIds.includes(`tgt-${r.id}`);
-              const isCompletedMission = isLocallyCompleted || (Array.isArray(allMissions)
-                ? allMissions.some((m: any) => (m.report_id === r.id || m.report_id === r.client_report_id) && m.status === 'completed')
-                : false);
-              const isRecovered = r.sync_status === 'recovered' || isCompletedMission;
+                completedTargetIds.includes(`tgt-${r.id}`) ||
+                completedTargetIds.includes(`rep-${r.id}`);
+
+              const isRecovered = r.sync_status === 'recovered' || !!completedM || isLocallyCompleted;
+              const isInProgress = !isRecovered && (r.sync_status === 'in_progress' || !!activeM);
 
               let repDepth = r.loss_depth_m;
               if (!repDepth && r.notes) {
@@ -1373,11 +1401,17 @@ export default function App() {
               if (!repDepth) repDepth = 25;
 
               let repWeight = r.estimated_weight_kg;
-              if (!repWeight && r.notes) {
+              if (completedM && (completedM as any).weight_kg) {
+                repWeight = (completedM as any).weight_kg;
+              } else if (!repWeight && r.notes) {
                 const wm = r.notes.match(/Weight:\s*(\d+(?:\.\d+)?)/i);
                 if (wm) repWeight = parseFloat(wm[1]);
               }
-              const weightSuffix = repWeight ? ` • ${repWeight} Tons` : '';
+              const displayWeight = repWeight || 1.2;
+              const weightSuffix = ` • ${displayWeight} Tons`;
+
+              const assignedBoatTag = activeM?.boat_name || activeM?.boat_id || (activeM ? 'Rescue Patrol' : undefined);
+              const stageNum: 1 | 2 | 3 = isRecovered ? 3 : isInProgress ? 2 : 1;
 
               return {
                 id: repId,
@@ -1388,17 +1422,64 @@ export default function App() {
                 timestamp: reportDate ? new Date(reportDate).getTime() : Date.now(),
                 latLong: `${(r.loss_latitude || 13.1250).toFixed(4)}°N, ${(r.loss_longitude || 80.3150).toFixed(4)}°E • ${repDepth}m depth${weightSuffix}`,
                 depthM: repDepth,
-                stage: isRecovered ? 3 : 1,
-                stageTitle: isRecovered ? 'Stage 3' : 'Stage 1',
-                stageColor: isRecovered ? '#064e3b' : '#78350f',
-                stageBg: isRecovered ? '#d1fae5' : '#fef3c7',
-                stageText: isRecovered ? '🟢 Successfully Recovered & Hauled' : '🟡 Awaiting Rescue Team Assignment',
-                detail: isRecovered ? `Hauled & Verified: ${repWeight || 1.2} Tons` : 'Priority: High Attention',
-                subDetail: isRecovered ? 'Mission Closed • Circular Registry' : 'Awaiting Rescue Dispatch'
+                stage: stageNum,
+                stageTitle: `Stage ${stageNum}`,
+                stageColor: isRecovered ? '#064e3b' : isInProgress ? '#083344' : '#78350f',
+                stageBg: isRecovered ? '#d1fae5' : isInProgress ? '#cffafe' : '#fef3c7',
+                stageText: isRecovered
+                  ? (language === 'TA' ? `🟢 வெற்றிகரமாக மீட்கப்பட்டது (${displayWeight} டன்கள் பதிவு)` : `🟢 Successfully Recovered (${displayWeight} Tons hauled)`)
+                  : isInProgress
+                  ? (language === 'TA' ? `🔵 மீட்பு பணி தொடக்கம் — ${assignedBoatTag || 'காவல் படகு'} விரைந்தது` : `🔵 Rescue in Progress — ${assignedBoatTag || 'Patrol Vessel'} En Route`)
+                  : (language === 'TA' ? '🟡 மீட்புக் குழு ஒதுக்கீட்டிற்கு காத்திருக்கிறது' : '🟡 Awaiting Rescue Team Assignment'),
+                detail: isRecovered
+                  ? (language === 'TA' ? `சரிபார்க்கப்பட்ட எடை: ${displayWeight} டன்கள்` : `Hauled & Verified: ${displayWeight} Tons`)
+                  : isInProgress
+                  ? (language === 'TA' ? `காவல் படகு: ${assignedBoatTag || 'மீட்புக் குழு'}` : `Vessel: ${assignedBoatTag || 'Rescue Boat'}`)
+                  : (language === 'TA' ? 'முன்னுரிமை: உயர் கவனம்' : 'Priority: High Attention'),
+                subDetail: isRecovered
+                  ? (language === 'TA' ? 'பணி நிறைவு • சுழற்சி லெட்ஜர் பதிவு' : 'Mission Closed • Circular Registry')
+                  : isInProgress
+                  ? (language === 'TA' ? 'ஆயத்தொலைவுகளை நோக்கி படகு செல்கிறது' : 'Approaching coordinates')
+                  : (language === 'TA' ? 'AI டிரிஃப்ட் பாதை தயார்' : 'AI Drift Corridor Active')
               };
             });
 
-            setReports(mappedReports);
+            // Retain any pending offline reports from offline outbox queue so they never vanish
+            try {
+              if (typeof window !== 'undefined' && window.localStorage) {
+                const qStr = window.localStorage.getItem('ghostnet_offline_queue');
+                if (qStr) {
+                  const qList: any[] = JSON.parse(qStr);
+                  if (Array.isArray(qList)) {
+                    qList.forEach((qItem: any) => {
+                      const qId = qItem.client_report_id || qItem.id;
+                      const already = mappedReports.some((m) => m.id === qId);
+                      if (!already) {
+                        mappedReports.unshift({
+                          id: qId,
+                          gearType: qItem.gear_type || 'Monofilament Gillnet',
+                          reportedBy: currentUser?.name || 'Registered Fisherman',
+                          vesselTag: qItem.boat_id || currentUser?.boatTag || 'IND-TN-07-SP-0007',
+                          reportedTime: formatRelativeTime(qItem.loss_time || Date.now(), language),
+                          timestamp: qItem.loss_time ? new Date(qItem.loss_time).getTime() : Date.now(),
+                          latLong: `${(qItem.loss_latitude || 13.1250).toFixed(4)}°N, ${(qItem.loss_longitude || 80.3150).toFixed(4)}°E • ${qItem.loss_depth_m || 25}m depth • ${qItem.estimated_weight_kg || 1.2} Tons`,
+                          depthM: qItem.loss_depth_m || 25,
+                          stage: 1 as const,
+                          stageTitle: 'Stage 1',
+                          stageColor: '#78350f',
+                          stageBg: '#fef3c7',
+                          stageText: language === 'TA' ? '🟡 ஆஃப்லைன் சேமிப்பு • நெட்வொர்க் ஒத்திசைவு நிலுவை' : '🟡 Offline Stored • Pending Shore Sync',
+                          detail: language === 'TA' ? 'முன்னுரிமை: உயர் கவனம்' : 'Priority: High Attention',
+                          subDetail: language === 'TA' ? 'மீட்பு அனுப்பப்படுவதற்கு காத்திருக்கிறது' : 'Awaiting Rescue Dispatch'
+                        });
+                      }
+                    });
+                  }
+                }
+              }
+            } catch (e) {}
+
+                        setReports(mappedReports);
             try {
               if (typeof window !== 'undefined' && window.localStorage) {
                 window.localStorage.setItem('ghostnet_saved_reports', JSON.stringify(mappedReports));
@@ -2539,6 +2620,8 @@ export default function App() {
     // 2. Update matching report stage to Stage 2 (In Progress) and persist
     const updatedReports = reports.map((rep) =>
       rep.id === target.id ||
+      rep.id === target.id.replace(/^tgt-/, 'rep-') ||
+      rep.id === target.id.replace(/^rep-/, 'tgt-') ||
       rep.gearType.toLowerCase() === target.gearName.toLowerCase()
         ? {
             ...rep,
