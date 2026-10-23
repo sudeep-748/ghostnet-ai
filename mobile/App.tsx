@@ -5109,23 +5109,6 @@ export default function App() {
                   </View>
                 </TouchableOpacity>
 
-                {/* Mission Completion Action Card */}
-                <View style={styles.fieldActionCard}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontSize: 20 }}>⚓</Text>
-                    <Text style={styles.fieldActionTitle}>Field Action Log</Text>
-                  </View>
-                  <Text style={styles.fieldActionDesc}>
-                    Upon surfacing and winching the target gear to the recovery deck, verify dry net mass to close the maritime ledger.
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.markRecoveredBtn}
-                    onPress={() => setShowVerificationModal(true)}
-                  >
-                    <Text style={{ fontSize: 18 }}>✅</Text>
-                    <Text style={styles.markRecoveredText}>{t('verifyOnDeckBtn')}</Text>
-                  </TouchableOpacity>
-                </View>
               </>
             );
           })()}
