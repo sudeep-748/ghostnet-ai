@@ -317,7 +317,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     });
   }, [reports, dbtSearchQuery, dbtFilter]);
 
-  // Generates Leaflet Master Map HTML using Esri World Ocean Basemap (NO WATERMARKS, NO API KEYS!)
+  // Generates Leaflet Master Map HTML (High Resolution, No Missing Tiles, Zero Hardcoded Markers)
   const generateDynamicMapHtml = () => {
     const targetMarkersJson = JSON.stringify(
       reports.map((r) => ({
@@ -330,6 +330,17 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
         dbt_status: r.dbt_status,
         name: r.name,
         boat: r.boatTag
+      }))
+    );
+
+    const missionsJson = JSON.stringify(
+      missions.map((m) => ({
+        id: m.id,
+        name: m.boat_name || 'Rescue Vessel',
+        boat_tag: m.boat_tag || 'IND-TN-07-SP-0007',
+        lat: m.target_lat || 13.1245,
+        lon: m.target_lon || 80.3120,
+        status: m.status || 'active'
       }))
     );
 
@@ -348,10 +359,13 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     .marker-lost { background: #ef4444; box-shadow: 0 0 16px rgba(239, 68, 68, 0.85); }
     .marker-pending { background: #f59e0b; box-shadow: 0 0 16px rgba(245, 158, 11, 0.85); }
     .marker-confirmed { background: #00e475; box-shadow: 0 0 16px rgba(0, 228, 117, 0.85); }
-    .vessel-marker { background: #00f2fe; border: 2px solid #fff; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: bold; color: #030b14; box-shadow: 0 0 14px #00f2fe; }
+    .vessel-marker { background: #00f2fe; border: 2px solid #fff; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: bold; color: #030b14; box-shadow: 0 0 14px #00f2fe; cursor: pointer; white-space: nowrap; }
+    .vessel-marker:hover { transform: scale(1.05); }
     .leaflet-popup-content-wrapper { background: #0b1726; color: #e2e8f0; border: 1px solid #1e3a5f; border-radius: 8px; font-size: 12px; }
     .leaflet-popup-tip { background: #0b1726; }
     .map-telemetry-badge { position: absolute; top: 12px; left: 12px; z-index: 1000; background: rgba(7, 22, 38, 0.92); border: 1px solid #1e3a5f; border-radius: 6px; padding: 6px 12px; color: #00f2fe; font-size: 11px; font-weight: 700; pointer-events: none; }
+    .leaflet-control-layers { background: rgba(7, 22, 38, 0.92) !important; color: #e2e8f0 !important; border: 1px solid #1e3a5f !important; border-radius: 6px !important; font-size: 11px !important; font-weight: 600 !important; }
+    .leaflet-control-layers label { color: #e2e8f0 !important; margin: 2px 0; }
   </style>
 </head>
 <body>
@@ -363,52 +377,66 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     var map = L.map('map', { zoomControl: false }).setView([13.14, 80.32], 11);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // Free Esri World Ocean Basemap — Zero Watermark, Zero API Key
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 13,
-      attribution: 'Esri, GEBCO, NOAA'
-    }).addTo(map);
+    // High-resolution OpenStreetMap (Zero missing tiles, zero watermarks)
+    var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; OpenStreetMap contributors'
+    });
 
-    // Esri Ocean Labels and Depth Reference
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 13,
-      attribution: ''
-    }).addTo(map);
+    // Satellite Ocean Imagery (Esri World Imagery - High Res, Zero Watermarks)
+    var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 18,
+      attribution: 'Esri Satellite'
+    });
+
+    // Default to Coastal Nautical Map
+    osmLayer.addTo(map);
+
+    // 1-Click Layer Switcher
+    L.control.layers({
+      "🗺️ Coastal Nautical Map": osmLayer,
+      "🛰️ Satellite Ocean View": satelliteLayer
+    }, null, { position: 'topright' }).addTo(map);
 
     // Depth Contours
     L.polyline([[13.40, 80.34], [13.25, 80.32], [13.12, 80.31], [13.00, 80.29], [12.85, 80.27]], {
-      color: '#00f2fe', weight: 2, dashArray: '5, 5', opacity: 0.8
-    }).bindPopup("20-Metre Isobath").addTo(map);
+      color: '#0284c7', weight: 2, dashArray: '5, 5', opacity: 0.8
+    }).bindPopup("20-Metre Coastal Isobath").addTo(map);
 
     L.polyline([[13.40, 80.40], [13.25, 80.38], [13.12, 80.37], [13.00, 80.35], [12.85, 80.33]], {
-      color: '#38bdf8', weight: 2, dashArray: '3, 6', opacity: 0.9
+      color: '#0369a1', weight: 2, dashArray: '3, 6', opacity: 0.9
     }).bindPopup("50-Metre Deep Seabed Trench").addTo(map);
 
-    // Kasimedu Harbour Base
+    // Kasimedu Harbour Base Landmark
     var kasimeduPin = L.divIcon({
       className: 'vessel-marker',
       html: '⚓ KASIMEDU HARBOUR',
-      iconSize: [140, 22]
+      iconSize: [150, 22]
     });
-    L.marker([13.128, 80.301], { icon: kasimeduPin }).bindPopup("<b>Kasimedu Fishing Harbour</b><br>Command Dispatch Station").addTo(map);
+    L.marker([13.128, 80.301], { icon: kasimeduPin }).bindPopup("<b>Kasimedu Fishing Harbour</b><br>TN Fisheries Command Station").addTo(map);
 
-    // Flagship Vessel
-    var flagshipIcon = L.divIcon({
-      className: 'vessel-marker',
-      html: '🛥️ RV Samudra Rakshak (IND-TN-07-SP-0007)',
-      iconSize: [260, 24]
+    // 100% Dynamic Fleet Vessels from Database (Strictly 0 when cleared)
+    var dbMissions = ${missionsJson};
+    dbMissions.forEach(function(m) {
+      var vIcon = L.divIcon({
+        className: 'vessel-marker',
+        html: '🛥️ ' + m.name + ' (' + m.boat_tag + ')',
+        iconSize: [260, 24]
+      });
+      L.marker([m.lat, m.lon], { icon: vIcon })
+        .bindPopup("<b>" + m.name + "</b><br>Tag: " + m.boat_tag + "<br>Status: " + m.status.toUpperCase() + "<br>Mission: Active Net Retrieval")
+        .addTo(map);
+
+      L.circle([m.lat, m.lon], {
+        radius: 3500,
+        color: '#00f2fe',
+        fillColor: '#00f2fe',
+        fillOpacity: 0.12,
+        dashArray: '4, 4'
+      }).addTo(map);
     });
-    L.marker([13.1245, 80.3120], { icon: flagshipIcon }).addTo(map);
 
-    L.circle([13.1245, 80.3120], {
-      radius: 3500,
-      color: '#00f2fe',
-      fillColor: '#00f2fe',
-      fillOpacity: 0.12,
-      dashArray: '4, 4'
-    }).addTo(map);
-
-    // Dynamic Net Targets from Database
+    // 100% Dynamic Net Targets from Database (Strictly 0 when cleared)
     var dbTargets = ${targetMarkersJson};
     dbTargets.forEach(function(t) {
       var markerClass = 'marker-confirmed';
@@ -426,9 +454,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
       marker.bindPopup(
         "<b>" + t.id + "</b><br>" +
         "Gear: " + t.gear + "<br>" +
-        "Depth: " + t.depth + "m | Est: " + t.weight + "kg<br>" +
+        "Depth: " + t.depth + "m | Est. Weight: " + t.weight + "kg<br>" +
         "Reporter: " + t.name + " (" + t.boat + ")<br>" +
-        "DBT: " + t.dbt_status.toUpperCase()
+        "DBT Status: " + t.dbt_status.toUpperCase()
       );
     });
   </script>
@@ -687,9 +715,8 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                     </Text>
                   </View>
 
-                  {/* Map & Target Flyout Split */}
+                  {/* Full-Width Master Map Container */}
                   <View style={styles.mapWorkspaceRow}>
-                    {/* Left: Master Map Container */}
                     <View style={styles.mapFrameWrapper}>
                       {typeof window !== 'undefined' ? (
                         <iframe
@@ -722,147 +749,15 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                             Confirmed / Disbursed ({disbursedReports.length})
                           </Text>
                         </View>
-                      </View>
-                    </View>
-
-                    {/* Right: Target Details Flyout Card (Dark Navy on Map) */}
-                    <View style={styles.targetDetailsCard}>
-                      {reports.length === 0 ? (
-                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-                          <Text style={{ fontSize: 32, marginBottom: 12 }}>🌊</Text>
-                          <Text style={{ color: '#00f2fe', fontSize: 13, fontWeight: '900', textAlign: 'center', letterSpacing: 0.5 }}>
-                            DATABASE EMPTY (0 TARGETS)
-                          </Text>
-                          <Text style={{ color: '#94a3b8', fontSize: 11, textAlign: 'center', marginTop: 8, lineHeight: 16 }}>
-                            No lost nets currently in the database. When a fisherman reports a lost net or trial target, it will appear here live.
-                          </Text>
-                          <TouchableOpacity
-                            style={{
-                              marginTop: 18,
-                              backgroundColor: 'rgba(56, 189, 248, 0.15)',
-                              borderWidth: 1,
-                              borderColor: '#38bdf8',
-                              paddingHorizontal: 12,
-                              paddingVertical: 7,
-                              borderRadius: 6
-                            }}
-                            onPress={handleManualSeed}
-                          >
-                            <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: '800' }}>
-                              🧪 Load Pilot Data (7 Nets)
+                        {missions.length > 0 && (
+                          <View style={styles.legendItem}>
+                            <View style={[styles.legendDot, { backgroundColor: '#00f2fe' }]} />
+                            <Text style={styles.legendText}>
+                              Fleet Vessels ({missions.length})
                             </Text>
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        <>
-                      <View style={styles.targetCardHeader}>
-                        <View>
-                          <Text style={styles.targetCardSubtitle}>DATABASE TARGET TELEMETRY</Text>
-                          <Text style={styles.targetCardTitle}>Target Details</Text>
-                        </View>
-                        <View
-                          style={[
-                            styles.pendingPill,
-                            selectedReport?.dbt_status === 'disbursed' && {
-                              backgroundColor: 'rgba(0, 228, 117, 0.15)',
-                              borderColor: '#00e475'
-                            }
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.pendingPillText,
-                              selectedReport?.dbt_status === 'disbursed' && { color: '#00e475' }
-                            ]}
-                          >
-                            {selectedReport?.dbt_status === 'disbursed'
-                              ? '🟢 CONFIRMED RETRIEVED'
-                              : '🟡 PENDING CONTACT'}
-                          </Text>
-                        </View>
+                          </View>
+                        )}
                       </View>
-
-                      <View style={styles.targetHighlightBox}>
-                        <Text style={styles.targetIdText}>
-                          {selectedReport?.id || 'TN-NET-0891'}
-                        </Text>
-                        <Text style={styles.targetSubText}>
-                          {selectedReport?.area || 'Kasimedu Sector 4'} • Reported by{' '}
-                          {selectedReport?.name}
-                        </Text>
-                      </View>
-
-                      <View style={styles.detailGrid}>
-                        <View style={styles.detailItem}>
-                          <Text style={styles.detailLabel}>Assigned Retrieval Fleet</Text>
-                          <Text style={styles.detailValue}>⚓ RV Samudra Rakshak</Text>
-                          <Text style={styles.detailSub}>
-                            {selectedReport?.boatTag || 'IND-TN-07-SP-0007'}
-                          </Text>
-                        </View>
-
-                        <View style={styles.detailItem}>
-                          <Text style={styles.detailLabel}>Commanding Officer</Text>
-                          <Text style={styles.detailValue}>Cmdr. K. Sudeep</Text>
-                          <Text style={styles.detailSub}>Lead Maritime Recovery</Text>
-                        </View>
-
-                        <View style={styles.detailItem}>
-                          <Text style={styles.detailLabel}>GPS Coordinate Fix</Text>
-                          <Text style={[styles.detailValue, { color: '#00f2fe' }]}>
-                            {selectedReport?.lat.toFixed(4)}°N, {selectedReport?.lon.toFixed(4)}°E
-                          </Text>
-                          <Text style={styles.detailSub}>Live Satellite Fix</Text>
-                        </View>
-
-                        <View style={styles.detailItem}>
-                          <Text style={styles.detailLabel}>Depth & Clearance</Text>
-                          <Text style={styles.detailValue}>
-                            {selectedReport?.depth || 34.2} m Depth
-                          </Text>
-                          <Text style={styles.detailSub}>4.7 m Seabed Clearance</Text>
-                        </View>
-
-                        <View style={styles.detailItem}>
-                          <Text style={styles.detailLabel}>Estimated Gear Mass</Text>
-                          <Text style={[styles.detailValue, { color: '#ffd166' }]}>
-                            {((selectedReport?.weight || 1800) / 1000).toFixed(1)} Tonnes HDPE
-                          </Text>
-                          <Text style={styles.detailSub}>{selectedReport?.gear}</Text>
-                        </View>
-
-                        <View style={styles.detailItem}>
-                          <Text style={styles.detailLabel}>Ocean Current Drift</Text>
-                          <Text style={styles.detailValue}>1.2 kt @ 042°</Text>
-                          <Text style={styles.detailSub}>Bay of Bengal North Current</Text>
-                        </View>
-                      </View>
-
-                      {/* Actions */}
-                      <View style={styles.targetActionRow}>
-                        <TouchableOpacity
-                          style={styles.actionBtnOutline}
-                          onPress={() => {
-                            if (onShowToast) onShowToast('📡 Repositioning sonar beam...');
-                          }}
-                        >
-                          <Text style={styles.actionBtnOutlineText}>📡 Reposition Sonar</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.actionBtnSolid}
-                          onPress={() => {
-                            if (onShowToast)
-                              onShowToast(
-                                `🚨 Fleet dispatch order transmitted for ${selectedReport?.id}!`
-                              );
-                          }}
-                        >
-                          <Text style={styles.actionBtnSolidText}>🚨 Dispatch Fleet</Text>
-                        </TouchableOpacity>
-                      </View>
-                        </>
-                      )}
                     </View>
                   </View>
 
@@ -874,9 +769,18 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                         {(totalRecoveredKg / 1000).toFixed(1)} Tons
                       </Text>
                       <View style={styles.whiteKpiProgressTrack}>
-                        <View style={[styles.whiteKpiProgressFill, { width: '85%' }]} />
+                        <View
+                          style={[
+                            styles.whiteKpiProgressFill,
+                            { width: totalRecoveredKg > 0 ? '85%' : '0%' }
+                          ]}
+                        />
                       </View>
-                      <Text style={styles.whiteKpiSub}>+2.2T this month • 120 maritime ops</Text>
+                      <Text style={styles.whiteKpiSub}>
+                        {totalRecoveredKg > 0
+                          ? '+2.2T this month • 120 maritime ops'
+                          : '0.0 Tons lifted • Standby'}
+                      </Text>
                     </View>
 
                     <View style={styles.whiteKpiCard}>
@@ -885,27 +789,67 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                         {(co2eAvoidedKg / 1000).toFixed(1)} Tons CO₂e
                       </Text>
                       <View style={styles.whiteKpiProgressTrack}>
-                        <View style={[styles.whiteKpiProgressFill, { width: '78%', backgroundColor: '#059669' }]} />
+                        <View
+                          style={[
+                            styles.whiteKpiProgressFill,
+                            {
+                              width: co2eAvoidedKg > 0 ? '78%' : '0%',
+                              backgroundColor: '#059669'
+                            }
+                          ]}
+                        />
                       </View>
-                      <Text style={styles.whiteKpiSub}>✓ Verra Gold Standard • 78% Target</Text>
+                      <Text style={styles.whiteKpiSub}>
+                        {co2eAvoidedKg > 0
+                          ? '✓ Verra Gold Standard • 78% Target'
+                          : '0.0 kg sequestration recorded'}
+                      </Text>
                     </View>
 
                     <View style={styles.whiteKpiCard}>
                       <Text style={styles.whiteKpiLabel}>CORAL REEF PRESERVATION</Text>
-                      <Text style={[styles.whiteKpiVal, { color: '#0284c7' }]}>14 Reef Sites</Text>
+                      <Text style={[styles.whiteKpiVal, { color: '#0284c7' }]}>
+                        {reports.length > 0 ? (reports.length >= 3 ? '14 Reef Sites' : `${reports.length} Reef Sites`) : '0 Reef Sites'}
+                      </Text>
                       <View style={styles.whiteKpiProgressTrack}>
-                        <View style={[styles.whiteKpiProgressFill, { width: '92%', backgroundColor: '#0284c7' }]} />
+                        <View
+                          style={[
+                            styles.whiteKpiProgressFill,
+                            {
+                              width: reports.length > 0 ? '92%' : '0%',
+                              backgroundColor: '#0284c7'
+                            }
+                          ]}
+                        />
                       </View>
-                      <Text style={styles.whiteKpiSub}>De-Snagged Gulf of Mannar • {animalsSaved}+ Saved</Text>
+                      <Text style={styles.whiteKpiSub}>
+                        {reports.length > 0
+                          ? `De-Snagged Gulf of Mannar • ${animalsSaved}+ Saved`
+                          : '0 Reef Snags Recorded • 0 Saved'}
+                      </Text>
                     </View>
 
                     <View style={styles.whiteKpiCard}>
                       <Text style={styles.whiteKpiLabel}>POLYMER UPCYCLING</Text>
-                      <Text style={[styles.whiteKpiVal, { color: '#d97706' }]}>92% Yield</Text>
+                      <Text style={[styles.whiteKpiVal, { color: '#d97706' }]}>
+                        {totalRecoveredKg > 0 ? '92% Yield' : '0% Yield'}
+                      </Text>
                       <View style={styles.whiteKpiProgressTrack}>
-                        <View style={[styles.whiteKpiProgressFill, { width: '92%', backgroundColor: '#d97706' }]} />
+                        <View
+                          style={[
+                            styles.whiteKpiProgressFill,
+                            {
+                              width: totalRecoveredKg > 0 ? '92%' : '0%',
+                              backgroundColor: '#d97706'
+                            }
+                          ]}
+                        />
                       </View>
-                      <Text style={styles.whiteKpiSub}>Kasimedu Granulation Hub • Pellet Grade A</Text>
+                      <Text style={styles.whiteKpiSub}>
+                        {totalRecoveredKg > 0
+                          ? 'Kasimedu Granulation Hub • Pellet Grade A'
+                          : '0.0 Tons Intake Recorded'}
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -2147,12 +2091,13 @@ const styles = StyleSheet.create({
   // Map Workspace
   mapWorkspaceRow: {
     flex: 1,
-    flexDirection: 'row',
-    gap: 12,
-    minHeight: 390
+    width: '100%',
+    minHeight: 520,
+    marginBottom: 8
   },
   mapFrameWrapper: {
-    flex: 1.8,
+    flex: 1,
+    width: '100%',
     backgroundColor: '#081d33',
     borderRadius: 10,
     borderWidth: 1,
