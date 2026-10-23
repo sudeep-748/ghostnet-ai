@@ -4534,7 +4534,7 @@ export default function App() {
       winchLoadKg: Math.round((selectedTarget?.massKg || 380) * 1.25),
       bottomSubstrate: 'Limestone Reef Snag',
       gpsCoordinates: selectedTarget?.coords || '13°07\'42.1"N 80°18\'09.4"E',
-      primaryBox: { classId: 0, className: 'ghost_net', confidence: 0.964, x: 22, y: 26, width: 54, height: 44 },
+      primaryBox: { classId: 0, className: 'ghost_net', confidence: 0.964, x: 55.5, y: 21, width: 29, height: 59 },
       timestamp: Date.now()
     };
 
@@ -4610,14 +4610,16 @@ export default function App() {
             overflow: 'hidden',
             backgroundColor: '#020617',
             marginBottom: 10,
-            position: 'relative'
+            position: 'relative',
+            width: '100%',
+            aspectRatio: 512 / 280
           }}>
             <Image
               source={activeTarget.imageUri ? { uri: activeTarget.imageUri } : SONAR_IMG}
               style={{
                 width: '100%',
-                height: 290,
-                resizeMode: 'cover'
+                height: '100%',
+                resizeMode: 'contain'
               }}
             />
 
@@ -4625,10 +4627,10 @@ export default function App() {
             {activeTarget.isNetConfirmed && (
               <View style={{
                 position: 'absolute',
-                top: `${activeTarget.primaryBox?.y || 22}%`,
-                left: `${activeTarget.primaryBox?.x || 20}%`,
-                width: `${activeTarget.primaryBox?.width || 56}%`,
-                height: `${activeTarget.primaryBox?.height || 46}%`,
+                top: `${activeTarget.primaryBox?.y ?? 21}%`,
+                left: `${activeTarget.primaryBox?.x ?? 55.5}%`,
+                width: `${activeTarget.primaryBox?.width ?? 29}%`,
+                height: `${activeTarget.primaryBox?.height ?? 59}%`,
                 borderWidth: 2.5,
                 borderColor: '#00e475',
                 borderRadius: 4,

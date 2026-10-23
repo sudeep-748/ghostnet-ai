@@ -309,19 +309,19 @@ export async function runYoloSonarInference(
         classId: 0,
         className: 'ghost_net',
         confidence: parsed.confidence,
-        x: 22,
-        y: 26,
-        width: 54,
-        height: 44
+        x: 55.5,
+        y: 21,
+        width: 29,
+        height: 59
       },
       shadowBox: parsed.isNet ? {
         classId: 1,
         className: 'acoustic_shadow',
         confidence: 0.94,
-        x: 48,
-        y: 42,
-        width: 38,
-        height: 32
+        x: 71.5,
+        y: 22,
+        width: 13,
+        height: 56
       } : undefined,
       timestamp: Date.now()
     };
