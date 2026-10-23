@@ -208,8 +208,41 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     }
   };
 
+  // Real-Time Maritime Sync Engine: 5s background heartbeat + instant tab resume
   useEffect(() => {
+    // Initial fetch on mount with spinner
     fetchDatabaseData(true);
+
+    // 1. Silent 5-second background heartbeat
+    const interval = setInterval(() => {
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          fetchDatabaseData(false);
+        }
+      }
+    }, 5000);
+
+    // 2. Instant wakeup on screen unlock, app resume, or reconnect
+    const handleResume = () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        fetchDatabaseData(false);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', handleResume);
+      window.addEventListener('focus', handleResume);
+      document.addEventListener('visibilitychange', handleResume);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', handleResume);
+        window.removeEventListener('focus', handleResume);
+        document.removeEventListener('visibilitychange', handleResume);
+      }
+    };
   }, []);
 
   const handleManualSeed = async () => {
