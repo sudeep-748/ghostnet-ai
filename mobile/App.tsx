@@ -2626,11 +2626,11 @@ export default function App() {
   <div class="map-legend-container">
     <div class="legend-content" id="legendContent">
       <div style="font-weight: bold; margin-bottom: 5px; color: #38bdf8; font-size: 10px; letter-spacing: 0.5px;">PROBABILITY DENSITY</div>
-      <div class="map-legend-row"><div class="map-legend-dot" style="background:#ff2a5f;"></div> 🔴 0h Loss Site (Critical)</div>
-      <div class="map-legend-row"><div class="map-legend-dot" style="background:#00e475;"></div> 🟢 +24h Forecast (High)</div>
-      <div class="map-legend-row"><div class="map-legend-dot" style="background:#ffd166;"></div> 🟡 +48h Forecast (Med)</div>
-      <div class="map-legend-row"><div class="map-legend-dot" style="background:#38bdf8;"></div> 🔵 +72h Forecast (Low)</div>
-      <div class="map-legend-row"><div style="width:14px; height:2px; background:#00e475; border-top:1px dashed #00e475;"></div> Mean Drift Path</div>
+      <div class="map-legend-row"><div class="map-legend-dot" style="background:#ff2a5f;"></div> 🔴 0h Loss Site (Drop)</div>
+      <div class="map-legend-row"><div class="map-legend-dot" style="background:#00e475;"></div> 🟢 +24h (1.7 NM / 3.1km)</div>
+      <div class="map-legend-row"><div class="map-legend-dot" style="background:#ffd166;"></div> 🟡 +48h (2.0 NM / 3.8km)</div>
+      <div class="map-legend-row"><div class="map-legend-dot" style="background:#38bdf8;"></div> 🔵 +72h (2.4 NM / 4.5km)</div>
+      <div class="map-legend-row"><div style="width:14px; height:2px; background:#00e475; border-top:1px dashed #00e475;"></div> Mean Drift Path (6.1 NM Total)</div>
       <div class="map-legend-row"><div style="width:14px; height:2px; background:#00f2fe; border-top:1px dashed #00f2fe;"></div> Course (${distNm} NM)</div>
     </div>
     <button class="legend-pill-btn" onclick="toggleLegend()">
@@ -2828,15 +2828,31 @@ export default function App() {
       }).addTo(map);
     }
 
-    // 3. Member 1 AI Drift Waypoint Markers (+24h, +48h, +72h) with exact coordinates in popups
+    // 3. Member 1 AI Drift Waypoint Markers (+24h, +48h, +72h) with exact distances in popups
+    var dist0_24_m = map.distance(netPos, wp24Pos);
+    var dist0_24_nm = (dist0_24_m / 1852).toFixed(1);
+    var dist0_24_km = (dist0_24_m / 1000).toFixed(1);
+
+    var dist24_48_m = map.distance(wp24Pos, wp48Pos);
+    var dist24_48_nm = (dist24_48_m / 1852).toFixed(1);
+    var dist24_48_km = (dist24_48_m / 1000).toFixed(1);
+
+    var dist48_72_m = map.distance(wp48Pos, wp72Pos);
+    var dist48_72_nm = (dist48_72_m / 1852).toFixed(1);
+    var dist48_72_km = (dist48_72_m / 1000).toFixed(1);
+
+    var totalDrift_nm = ((dist0_24_m + dist24_48_m + dist48_72_m) / 1852).toFixed(1);
+    var totalDrift_km = ((dist0_24_m + dist24_48_m + dist48_72_m) / 1000).toFixed(1);
+
     // +24h
     L.circle(wp24Pos, { radius: 1200, color: '#00e475', fillColor: '#00e475', fillOpacity: 0.25, weight: 1.5, dashArray: '4,4' }).addTo(map);
     var wp24Icon = L.divIcon({ className: '', html: '<div class="custom-wp-marker" style="background:#00e475;">24</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
     L.marker(wp24Pos, { icon: wp24Icon }).addTo(map).bindPopup(
-      '<div style="min-width:170px;">' +
+      '<div style="min-width:180px;">' +
       '<b style="color:#00e475;">📍 +24 Hours Forecast</b><br>' +
       '<b>Latitude:</b> ' + wp24Pos[0].toFixed(5) + '° N<br>' +
       '<b>Longitude:</b> ' + wp24Pos[1].toFixed(5) + '° E<br>' +
+      '<b>Drift from 0h:</b> <span style="color:#00e475;font-weight:bold;">' + dist0_24_nm + ' NM (' + dist0_24_km + ' km)</span><br>' +
       '<span style="font-size:10px;color:#94a3b8;">High Probability Search Corridor</span>' +
       '</div>'
     );
@@ -2845,10 +2861,12 @@ export default function App() {
     L.circle(wp48Pos, { radius: 2200, color: '#ffd166', fillColor: '#ffd166', fillOpacity: 0.20, weight: 1.5, dashArray: '4,4' }).addTo(map);
     var wp48Icon = L.divIcon({ className: '', html: '<div class="custom-wp-marker" style="background:#ffd166;">48</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
     L.marker(wp48Pos, { icon: wp48Icon }).addTo(map).bindPopup(
-      '<div style="min-width:170px;">' +
+      '<div style="min-width:180px;">' +
       '<b style="color:#ffd166;">📍 +48 Hours Forecast</b><br>' +
       '<b>Latitude:</b> ' + wp48Pos[0].toFixed(5) + '° N<br>' +
       '<b>Longitude:</b> ' + wp48Pos[1].toFixed(5) + '° E<br>' +
+      '<b>Drift 24h➔48h:</b> <span style="color:#ffd166;font-weight:bold;">' + dist24_48_nm + ' NM (' + dist24_48_km + ' km)</span><br>' +
+      '<b>Cumulative 48h:</b> ' + ((dist0_24_m + dist24_48_m) / 1852).toFixed(1) + ' NM<br>' +
       '<span style="font-size:10px;color:#94a3b8;">Medium Probability Search Corridor</span>' +
       '</div>'
     );
@@ -2857,10 +2875,12 @@ export default function App() {
     L.circle(wp72Pos, { radius: 3400, color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 0.16, weight: 1.5, dashArray: '4,4' }).addTo(map);
     var wp72Icon = L.divIcon({ className: '', html: '<div class="custom-wp-marker" style="background:#38bdf8;">72</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
     L.marker(wp72Pos, { icon: wp72Icon }).addTo(map).bindPopup(
-      '<div style="min-width:170px;">' +
+      '<div style="min-width:180px;">' +
       '<b style="color:#38bdf8;">📍 +72 Hours Forecast</b><br>' +
       '<b>Latitude:</b> ' + wp72Pos[0].toFixed(5) + '° N<br>' +
       '<b>Longitude:</b> ' + wp72Pos[1].toFixed(5) + '° E<br>' +
+      '<b>Drift 48h➔72h:</b> <span style="color:#38bdf8;font-weight:bold;">' + dist48_72_nm + ' NM (' + dist48_72_km + ' km)</span><br>' +
+      '<b>Total 72h Drift:</b> <span style="color:#38bdf8;font-weight:bold;">' + totalDrift_nm + ' NM (' + totalDrift_km + ' km)</span><br>' +
       '<span style="font-size:10px;color:#94a3b8;">Extended 3-Day Drift Horizon</span>' +
       '</div>'
     );
@@ -2869,6 +2889,18 @@ export default function App() {
     L.polyline([netPos, wp24Pos, wp48Pos, wp72Pos], {
       color: '#00e475', weight: 3, dashArray: '6, 6', opacity: 0.9
     }).addTo(map);
+
+    // 4B. Floating Tactical Distance Badges on Trajectory Segments
+    var bStyle = 'background:rgba(7,18,30,0.92);border:1px solid #00e475;color:#6ee7b7;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:800;font-family:monospace;white-space:nowrap;box-shadow:0 0 8px rgba(0,0,0,0.7);pointer-events:none;';
+
+    var b0_24 = L.divIcon({ className: '', html: '<div style="' + bStyle + '">📏 0h➔24h: ' + dist0_24_nm + ' NM</div>' });
+    L.marker([(netPos[0] + wp24Pos[0]) / 2, (netPos[1] + wp24Pos[1]) / 2], { icon: b0_24, interactive: false }).addTo(map);
+
+    var b24_48 = L.divIcon({ className: '', html: '<div style="' + bStyle + 'border-color:#ffd166;color:#fde047;">📏 24h➔48h: ' + dist24_48_nm + ' NM</div>' });
+    L.marker([(wp24Pos[0] + wp48Pos[0]) / 2, (wp24Pos[1] + wp48Pos[1]) / 2], { icon: b24_48, interactive: false }).addTo(map);
+
+    var b48_72 = L.divIcon({ className: '', html: '<div style="' + bStyle + 'border-color:#38bdf8;color:#7dd3fc;">📏 48h➔72h: ' + dist48_72_nm + ' NM</div>' });
+    L.marker([(wp48Pos[0] + wp72Pos[0]) / 2, (wp48Pos[1] + wp72Pos[1]) / 2], { icon: b48_72, interactive: false }).addTo(map);
 
     // 5. Course Intercept Vector Line (Boat -> Confirmed Net Lock or 0h Net)
     var activeTargetPos = isYoloConfirmed ? confirmedPos : netPos;
