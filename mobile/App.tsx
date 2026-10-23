@@ -1144,6 +1144,53 @@ export default function App() {
             window.localStorage.removeItem('ghostnet_unsynced_accounts');
           }
         }
+
+        // 1c. Drain and sync pending offline recovery mission completions!
+        const missionQueueStr = window.localStorage.getItem('ghostnet_offline_mission_queue');
+        if (missionQueueStr) {
+          const mQueue: any[] = JSON.parse(missionQueueStr);
+          if (Array.isArray(mQueue) && mQueue.length > 0) {
+            const remainingMQueue: any[] = [];
+            for (const item of mQueue) {
+              try {
+                let mId = item.mission_id;
+                if (!mId) {
+                  const createRes = await fetch(`${API_BASE}/api/v1/missions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      report_id: item.report_id,
+                      team_id: item.team_id,
+                      boat_id: item.boat_id || 'IND-TN-07-SP-0007'
+                    })
+                  });
+                  if (createRes.ok) {
+                    const cData = await createRes.json();
+                    mId = cData.id;
+                  }
+                }
+                if (mId) {
+                  const upRes = await fetch(`${API_BASE}/api/v1/missions/${mId}/updates`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...item, mission_id: mId })
+                  });
+                  if (!upRes.ok) remainingMQueue.push(item);
+                } else {
+                  remainingMQueue.push(item);
+                }
+              } catch (err) {
+                remainingMQueue.push(item);
+              }
+            }
+            if (remainingMQueue.length > 0) {
+              window.localStorage.setItem('ghostnet_offline_mission_queue', JSON.stringify(remainingMQueue));
+            } else {
+              window.localStorage.removeItem('ghostnet_offline_mission_queue');
+              showToast('🟢 Shore connection restored: Offline recovery logged to database!');
+            }
+          }
+        }
       }
     } catch (e) {}
 
@@ -1179,8 +1226,27 @@ export default function App() {
               }
             } catch (e) {}
           } else {
+            // Load locally completed target IDs to prevent cloud resurrection
+            const completedTargetIds: string[] = (() => {
+              try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                  const stored = window.localStorage.getItem('ghostnet_completed_target_ids');
+                  return stored ? JSON.parse(stored) : [];
+                }
+              } catch (e) {}
+              return [];
+            })();
+
             // A. Map into Rescue Targets (only unrecovered/pending lost gear)
             const unrecoveredReports = liveReports.filter((r: any) => {
+              const repId = r.client_report_id || r.id;
+              if (
+                completedTargetIds.includes(r.id) ||
+                (repId && completedTargetIds.includes(repId)) ||
+                completedTargetIds.includes(`tgt-${r.id}`)
+              ) {
+                return false;
+              }
               const isCompleted = Array.isArray(allMissions) && allMissions.some(
                 (m: any) => (m.report_id === r.id || m.report_id === r.client_report_id) && m.status === 'completed'
               );
@@ -1290,9 +1356,13 @@ export default function App() {
               const reportDate = r.loss_time || r.created_at;
               const timeStr = formatRelativeTime(reportDate, language);
 
-              const isCompletedMission = Array.isArray(allMissions)
+              const isLocallyCompleted =
+                completedTargetIds.includes(r.id) ||
+                (repId && completedTargetIds.includes(repId)) ||
+                completedTargetIds.includes(`tgt-${r.id}`);
+              const isCompletedMission = isLocallyCompleted || (Array.isArray(allMissions)
                 ? allMissions.some((m: any) => (m.report_id === r.id || m.report_id === r.client_report_id) && m.status === 'completed')
-                : false;
+                : false);
               const isRecovered = r.sync_status === 'recovered' || isCompletedMission;
 
               let repDepth = r.loss_depth_m;
@@ -2489,6 +2559,20 @@ export default function App() {
     setShowVerificationModal(false);
 
     if (selectedTarget) {
+      // 0. Mark target as permanently completed in persistent local blacklist immediately!
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          const compStr = window.localStorage.getItem('ghostnet_completed_target_ids');
+          const compList: string[] = compStr ? JSON.parse(compStr) : [];
+          if (selectedTarget.id && !compList.includes(selectedTarget.id)) {
+            compList.push(selectedTarget.id);
+          }
+          const rawRepId = selectedTarget.id.replace(/^tgt-/, 'rep-');
+          if (!compList.includes(rawRepId)) compList.push(rawRepId);
+          window.localStorage.setItem('ghostnet_completed_target_ids', JSON.stringify(compList));
+        }
+      } catch (e) {}
+
       let currentMissionId = activeMissionId;
       try {
         if (!currentMissionId && typeof window !== 'undefined' && window.localStorage) {
@@ -2505,7 +2589,7 @@ export default function App() {
             body: JSON.stringify({
               report_id: selectedTarget.id,
               team_id: currentUser.id || currentUser.name || currentUser.username,
-              boat_id: currentUser.boatTag
+              boat_id: currentUser.boatTag || 'IND-TN-07-SP-0007'
             })
           });
           if (createRes.ok) {
@@ -2515,27 +2599,44 @@ export default function App() {
         } catch (e) {}
       }
 
-      // 1. Post to backend to record in recovery_updates and complete mission!
+      // 1. Post to backend or queue offline to record in recovery_updates and complete mission!
+      const { lat, lon } = parseCoordinates(selectedTarget.coords);
+      const updatePayload = {
+        mission_id: currentMissionId,
+        report_id: selectedTarget.id,
+        team_id: currentUser.id || currentUser.name || currentUser.username,
+        boat_id: currentUser.boatTag || 'IND-TN-07-SP-0007',
+        status: 'net_recovered',
+        latitude: rescueCoords.lat || lat,
+        longitude: rescueCoords.lon || lon,
+        weight_kg: Number(verifiedWeight) || 1.2,
+        notes: `Hauled & verified by ${currentUser.name} on ${currentUser.boatTag}. Weight: ${verifiedWeight} Tons.`
+      };
+
+      let updateSent = false;
       if (currentMissionId) {
-        const { lat, lon } = parseCoordinates(selectedTarget.coords);
         try {
-          await fetch(`${API_BASE}/api/v1/missions/${currentMissionId}/updates`, {
+          const uRes = await fetch(`${API_BASE}/api/v1/missions/${currentMissionId}/updates`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              mission_id: currentMissionId,
-              report_id: selectedTarget.id,
-              team_id: currentUser.id || currentUser.name || currentUser.username,
-              status: 'net_recovered',
-              latitude: rescueCoords.lat || lat,
-              longitude: rescueCoords.lon || lon,
-              weight_kg: Number(verifiedWeight) || 1.2,
-              notes: `Hauled & verified by ${currentUser.name} on ${currentUser.boatTag}. Weight: ${verifiedWeight} Tons.`
-            })
+            body: JSON.stringify(updatePayload)
           });
+          if (uRes.ok) updateSent = true;
         } catch (e) {
           console.log('Offline recovery update note:', e);
         }
+      }
+
+      // If offline or network unavailable, push into persistent offline queue (identical to fisherman reporting)
+      if (!updateSent) {
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            const qStr = window.localStorage.getItem('ghostnet_offline_mission_queue');
+            const mQueue: any[] = qStr ? JSON.parse(qStr) : [];
+            mQueue.push(updatePayload);
+            window.localStorage.setItem('ghostnet_offline_mission_queue', JSON.stringify(mQueue));
+          }
+        } catch (e) {}
       }
 
       // 2. Update local report to Stage 3 (Recovered) and persist to localStorage!
@@ -2572,6 +2673,8 @@ export default function App() {
       setSelectedTarget(null);
       setActiveMissionId(null);
       setShowSonarConsole(false);
+      setIsNetMarkedOnMap(false);
+      setDetectedNetTarget(null);
 
       // 4. Trigger background sync to confirm DB status
       setTimeout(() => {
