@@ -861,23 +861,25 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                     <View style={styles.darkKpiCard}>
                       <Text style={styles.darkKpiLabel}>TOTAL DECLARATIONS</Text>
                       <Text style={styles.darkKpiVal}>{totalReportsCount}</Text>
-                      <Text style={styles.darkKpiSub}>+18 logged this week • 96 Active Claims</Text>
+                      <Text style={styles.darkKpiSub}>
+                        {totalReportsCount > 0 ? `${totalReportsCount} Active Claims` : '0 Claims Recorded'}
+                      </Text>
                     </View>
 
                     <View style={styles.darkKpiCard}>
                       <Text style={styles.darkKpiLabel}>PENDING VERIFICATION</Text>
                       <Text style={[styles.darkKpiVal, { color: '#f59e0b' }]}>
-                        {pendingReports.length}{' '}
-                        <Text style={{ fontSize: 13, color: '#f59e0b' }}>Urgent ({pendingReports.length})</Text>
+                        {pendingReports.length}
                       </Text>
-                      <Text style={styles.darkKpiSub}>Awaiting Sonar Ping Sweep</Text>
+                      <Text style={styles.darkKpiSub}>
+                        {pendingReports.length > 0 ? 'Awaiting Sonar Ping Sweep' : '0 Pending Sweep'}
+                      </Text>
                     </View>
 
                     <View style={styles.darkKpiCard}>
                       <Text style={styles.darkKpiLabel}>DBT DISBURSED (FY24-25)</Text>
                       <Text style={[styles.darkKpiVal, { color: '#00e475' }]}>
-                        ₹{(totalDisbursedAmount / 100000).toFixed(1)}L{' '}
-                        <Text style={{ fontSize: 13, color: '#00e475' }}>94.2% Success</Text>
+                        {totalDisbursedAmount > 0 ? `₹${(totalDisbursedAmount / 100000).toFixed(1)}L` : '₹0'}
                       </Text>
                       <Text style={styles.darkKpiSub}>PFMS Direct Credit Active</Text>
                     </View>
@@ -885,9 +887,11 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                     <View style={styles.darkKpiCard}>
                       <Text style={styles.darkKpiLabel}>AVG PAYOUT TURNAROUND</Text>
                       <Text style={[styles.darkKpiVal, { color: '#38bdf8' }]}>
-                        48h <Text style={{ fontSize: 13, color: '#38bdf8' }}>Optimal</Text>
+                        {disbursedReports.length > 0 ? '48h' : '0h'}
                       </Text>
-                      <Text style={styles.darkKpiSub}>-12h vs TN Benchmark • SLA Compliant</Text>
+                      <Text style={styles.darkKpiSub}>
+                        {disbursedReports.length > 0 ? 'PFMS Direct Credit • SLA Compliant' : 'Awaiting Claims'}
+                      </Text>
                     </View>
                   </View>
 
