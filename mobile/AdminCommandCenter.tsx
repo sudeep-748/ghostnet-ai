@@ -173,7 +173,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
             report_id: m.report_id,
             boat_name: m.boat_name || 'RV Samudra Rakshak',
             boat_tag: m.boat_tag || 'IND-TN-07-SP-0007',
-            team_name: m.team_name || 'Cmdr. K. Sudeep',
+            team_name: m.team_name || 'Marine Ops Officer',
             status: m.status || 'active',
             target_lat: m.target_lat,
             target_lon: m.target_lon
@@ -547,7 +547,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
               <Text style={{ fontSize: 13 }}>👮‍♂️</Text>
             </View>
             <View>
-              <Text style={styles.officerName}>Cmdr. K. Sudeep</Text>
+              <Text style={styles.officerName}>Admin Officer</Text>
               <Text style={styles.officerRole}>Chief Marine Ops Officer</Text>
             </View>
           </View>
@@ -1188,7 +1188,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                                     )}
                                   </View>
                                   <Text style={styles.whiteVesselTag}>
-                                    {mission.boat_tag || `IND-TN-07-SP-000${idx + 1}`} • {mission.team_name || 'Cmdr. K. Sudeep'}
+                                    {mission.boat_tag || `IND-TN-07-SP-000${idx + 1}`} • {mission.team_name || 'Marine Ops Officer'}
                                   </Text>
                                 </View>
                               </View>
