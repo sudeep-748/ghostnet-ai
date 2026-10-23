@@ -1404,13 +1404,12 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                         </View>
                         <View style={styles.whiteCarbonRow}>
                           <Text style={styles.whiteCarbonKey}>Current Benchmark Price</Text>
-                          <Text style={styles.whiteCarbonVal}>$42.00 USD / tCO₂e</Text>
+                          <Text style={styles.whiteCarbonVal}>₹3,528 / tCO₂e</Text>
                         </View>
                         <View style={styles.whiteCarbonRow}>
                           <Text style={styles.whiteCarbonKey}>Total Realized Value</Text>
                           <Text style={[styles.whiteCarbonVal, { color: '#059669', fontSize: 16 }]}>
-                            ${((co2eAvoidedKg / 1000) * 42.0).toFixed(2)} USD (₹
-                            {Math.round((co2eAvoidedKg / 1000) * 42.0 * 84).toLocaleString()})
+                            ₹{Math.round((co2eAvoidedKg / 1000) * 3528).toLocaleString()}
                           </Text>
                         </View>
                         <View style={styles.whiteCarbonRow}>
