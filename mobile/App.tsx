@@ -986,22 +986,67 @@ export default function App() {
     };
   }, []);
 
+  // Real-Time Offline Autopilot Simulation (Moves boat step-by-step toward net on CPU)
   useEffect(() => {
     let interval: any;
-    if (isNavigating) {
+    if (isNavigating && selectedTarget) {
+      const targetCoords = parseCoordinates(selectedTarget.coords);
+      const destLat = detectedNetTarget?.gpsCoordinates
+        ? parseCoordinates(detectedNetTarget.gpsCoordinates).lat
+        : targetCoords.lat;
+      const destLon = detectedNetTarget?.gpsCoordinates
+        ? parseCoordinates(detectedNetTarget.gpsCoordinates).lon
+        : targetCoords.lon;
+
       interval = setInterval(() => {
-        setNavProgress((prev) => {
-          if (prev >= 1) {
+        setRescueCoords((prev) => {
+          const dLat = destLat - prev.lat;
+          const dLon = destLon - prev.lon;
+          const distNm = calculateDistanceNm(prev.lat, prev.lon, destLat, destLon);
+
+          if (distNm < 0.04) {
             setIsNavigating(false);
-            showToast('🎯 TARGET INTERCEPTED! Ghost net reached on sonar.');
-            return 1;
+            showToast('🎯 TARGET INTERCEPTED! Rescue vessel arrived on target coordinates.');
+            setBoatApproachDistanceM(0);
+            return {
+              ...prev,
+              lat: destLat,
+              lon: destLon,
+              speedKn: 0.0
+            };
           }
-          return Math.min(1, prev + 0.08);
+
+          // Advance 9% of remaining distance each 800ms step
+          const stepRatio = 0.09;
+          const nextLat = prev.lat + dLat * stepRatio;
+          const nextLon = prev.lon + dLon * stepRatio;
+
+          // Stream live location fix directly to Leaflet map iframe
+          try {
+            if (typeof document !== 'undefined') {
+              const iframes = document.querySelectorAll('iframe');
+              iframes.forEach((ifr) => {
+                ifr.contentWindow?.postMessage(
+                  { type: 'BOAT_GPS_UPDATE', lat: nextLat, lon: nextLon },
+                  '*'
+                );
+              });
+            }
+          } catch (e) {}
+
+          setBoatApproachDistanceM((prevDist) => Math.max(0, Math.round(prevDist * 0.91)));
+
+          return {
+            lat: nextLat,
+            lon: nextLon,
+            speedKn: 14.2,
+            timestamp: Date.now()
+          };
         });
-      }, 700);
+      }, 800);
     }
     return () => clearInterval(interval);
-  }, [isNavigating]);
+  }, [isNavigating, selectedTarget, detectedNetTarget]);
 
   const [targets, setTargets] = useState<RescueTarget[]>(() => {
     try {
@@ -4825,6 +4870,34 @@ export default function App() {
                           >
                             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#00e475' }} />
                             <Text style={{ color: '#00f2fe', fontSize: 10, fontWeight: '800' }}>GPS LIVE</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 4,
+                              backgroundColor: isNavigating ? 'rgba(239, 68, 68, 0.25)' : 'rgba(0, 242, 254, 0.15)',
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                              borderWidth: 1,
+                              borderColor: isNavigating ? '#ef4444' : '#00f2fe'
+                            }}
+                            onPress={() => {
+                              if (isNavigating) {
+                                setIsNavigating(false);
+                                setRescueCoords((prev) => ({ ...prev, speedKn: 0.0 }));
+                                showToast('⏸️ Autopilot Cruise Paused (0.0 kn)');
+                              } else {
+                                setIsNavigating(true);
+                                showToast('▶️ Autopilot Cruise Engaged: 14.2 kn toward net coordinates');
+                              }
+                            }}
+                          >
+                            <Text style={{ fontSize: 10 }}>{isNavigating ? '⏸️' : '▶️'}</Text>
+                            <Text style={{ color: isNavigating ? '#f87171' : '#00f2fe', fontSize: 10, fontWeight: '800' }}>
+                              {isNavigating ? 'PAUSE CRUISE' : 'SIMULATE CRUISE'}
+                            </Text>
                           </TouchableOpacity>
                           <View
                             style={{
