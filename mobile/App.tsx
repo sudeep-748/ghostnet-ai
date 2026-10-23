@@ -2792,15 +2792,16 @@ export default function App() {
     var confirmedLon = ${typeof confirmedLonNum === 'number' && !isNaN(confirmedLonNum) ? confirmedLonNum : 'netPos[1]'};
     var confirmedPos = [confirmedLat, confirmedLon];
 
+    // Always render 0h Fisherman Loss Site Pin (Red Dot) on the drift map
+    var lossIcon = L.divIcon({ className: '', html: '<div class="custom-net-marker">🔴</div>', iconSize: [24, 24], iconAnchor: [12, 12] });
+    var lossMarker = L.marker(netPos, { icon: lossIcon }).addTo(map)
+      .bindPopup('<b>🔴 0h Fisherman Loss Site</b><br>' +
+                 '<b>Latitude:</b> ' + netPos[0].toFixed(5) + '° N<br>' +
+                 '<b>Longitude:</b> ' + netPos[1].toFixed(5) + '° E<br>' +
+                 '<b>Reported Gear:</b> ' + ${JSON.stringify(safeGear)} + '<br>' +
+                 '<span style="color:#ffd166;font-weight:bold;">Initial Drop Coordinate</span>');
+
     if (isYoloConfirmed) {
-      // 0h Loss Site Pin (Red Marker)
-      var lossIcon = L.divIcon({ className: '', html: '<div class="custom-net-marker">🔴</div>', iconSize: [24, 24], iconAnchor: [12, 12] });
-      var lossMarker = L.marker(netPos, { icon: lossIcon }).addTo(map)
-        .bindPopup('<b>🔴 0h Fisherman Loss Site</b><br>' +
-                   '<b>Latitude:</b> ' + netPos[0].toFixed(5) + '° N<br>' +
-                   '<b>Longitude:</b> ' + netPos[1].toFixed(5) + '° E<br>' +
-                   '<b>Reported Gear:</b> ' + ${JSON.stringify(safeGear)} + '<br>' +
-                   '<span style="color:#ffd166;font-weight:bold;">Initial Drop Coordinate</span>');
       var confirmedIcon = L.divIcon({
         className: '',
         html: '<div class="custom-confirmed-marker">🎯</div>',
