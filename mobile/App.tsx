@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { AdminCommandCenter } from './AdminCommandCenter';
+import { SONAR_PASS_DATA_URIS } from './sonarAssets';
 
 // Local asset bundled directly inside the mobile app
 const LOGO_IMG = require('./assets/logo.png');
@@ -96,10 +97,12 @@ async function analyzeSonarPassOffline(
     }
 
     let srcUrl = '';
-    if (typeof imageSource === 'string') {
+    if (typeof imageSource === 'string' && imageSource) {
       srcUrl = imageSource;
     } else if (imageSource && typeof imageSource === 'object' && imageSource.uri) {
       srcUrl = imageSource.uri;
+    } else if (SONAR_PASS_DATA_URIS[pIndex]) {
+      srcUrl = SONAR_PASS_DATA_URIS[pIndex];
     } else if (PASS_IMAGES[pIndex]) {
       srcUrl = PASS_IMAGES[pIndex];
     }
@@ -1117,7 +1120,8 @@ export default function App() {
           }
         }
 
-        const sourceForAnalysis = (isImageFile && uri) ? uri : (PASS_IMAGES[pIndex] || PASS_IMAGES[((pIndex - 1) % 10) + 1] || SONAR_IMG);
+        const validPassUri = (isImageFile && uri) ? uri : (SONAR_PASS_DATA_URIS[pIndex] || SONAR_PASS_DATA_URIS[((pIndex - 1) % 10) + 1] || '');
+        const sourceForAnalysis = validPassUri || (PASS_IMAGES[pIndex] || SONAR_IMG);
 
         // 100% Offline Client-Side Acoustic Computer Vision Analysis
         const analysis = await analyzeSonarPassOffline(sourceForAnalysis, pIndex, file.name);
@@ -1125,8 +1129,8 @@ export default function App() {
         passes.push({
           passIndex: pIndex,
           fileName: file.name,
-          fileUri: uri,
-          isImageFile,
+          fileUri: validPassUri,
+          isImageFile: true,
           isNet: analysis.isNet,
           confidence: analysis.confidence,
           verdict: analysis.verdict,
@@ -5383,11 +5387,9 @@ export default function App() {
                 position: 'relative'
               }}>
                 <Image
-                  source={
-                    (currentPass?.isImageFile && currentPass?.fileUri)
-                      ? { uri: currentPass.fileUri }
-                      : (PASS_IMAGES[currentPass?.passIndex || 1] || PASS_IMAGES[((((currentPass?.passIndex || 1) - 1) % 10) + 1)] || SONAR_IMG)
-                  }
+                  source={{
+                    uri: currentPass?.fileUri || SONAR_PASS_DATA_URIS[currentPass?.passIndex || 1] || SONAR_PASS_DATA_URIS[1]
+                  }}
                   resizeMode="contain"
                   style={{
                     position: 'absolute',
