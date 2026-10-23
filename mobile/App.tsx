@@ -5290,7 +5290,7 @@ export default function App() {
                 </Text>
               </View>
               <Text style={{ color: isTargetLocked ? '#00e475' : '#ffd166', fontSize: 15, fontWeight: '900', fontFamily: 'monospace' }}>
-                {(activePassMeta.confidence * 100).toFixed(1)}% MATCH
+                {(((currentPass?.confidence ?? activeTarget?.confidence) || 0.0) * 100).toFixed(1)}% MATCH
               </Text>
             </View>
 
