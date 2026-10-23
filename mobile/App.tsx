@@ -1431,17 +1431,48 @@ export default function App() {
     }
   };
 
-  // Reconnection Hook (Syncs once on initial launch and when reconnecting to shore network)
+  // Real-Time Maritime Sync Engine: 5s background heartbeat + instant tab resume
   useEffect(() => {
     syncWithBackend();
 
+    // 1. Lightweight 5-second polling interval (heartbeat)
+    const interval = setInterval(() => {
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          syncWithBackend();
+        }
+      }
+    }, 5000);
+
+    // 2. Instant wakeup on screen unlock, app resume, or reconnect
+    const handleResume = () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        syncWithBackend();
+      }
+    };
+
     if (typeof window !== 'undefined') {
-      window.addEventListener('online', syncWithBackend);
-      return () => {
-        window.removeEventListener('online', syncWithBackend);
-      };
+      window.addEventListener('online', handleResume);
+      window.addEventListener('focus', handleResume);
+      document.addEventListener('visibilitychange', handleResume);
     }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', handleResume);
+        window.removeEventListener('focus', handleResume);
+        document.removeEventListener('visibilitychange', handleResume);
+      }
+    };
   }, []);
+
+  // 3. Instant sync whenever user switches tabs (Tracker / Reports / Mission)
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      syncWithBackend();
+    }
+  }, [fisherTab, crewTab]);
 
   // Auto-advance Splash Screen after 1.8s & check for existing saved session!
   useEffect(() => {
@@ -3379,6 +3410,26 @@ export default function App() {
               >
                 <Text style={{ fontSize: 11 }}>📊</Text>
                 <Text style={{ fontSize: 11, color: '#38bdf8', fontWeight: '800' }}>DB</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                  paddingHorizontal: 8,
+                  paddingVertical: 5,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: 'rgba(16, 185, 129, 0.5)',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 3
+                }}
+                onPress={() => {
+                  syncWithBackend();
+                  showToast(language === 'TA' ? '🔄 நேரடி தரவு ஒத்திசைக்கப்பட்டது' : '🔄 Live data synchronized');
+                }}
+              >
+                <Text style={{ fontSize: 10 }}>🟢</Text>
+                <Text style={{ fontSize: 11, color: '#10b981', fontWeight: '800' }}>SYNC</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.langBadge} onPress={toggleLanguage}>
                 <Text style={styles.langBadgeText}>
