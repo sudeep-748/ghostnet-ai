@@ -46,10 +46,15 @@ export interface DbReport {
 
 export interface DbMission {
   id: string;
-  report_id: string;
-  boat_name: string;
-  team_name: string;
-  status: string;
+  report_id?: string;
+  boat_name?: string;
+  boat_tag?: string;
+  team_name?: string;
+  status?: string;
+  target_lat?: number;
+  target_lon?: number;
+  gear?: string;
+  notes?: string;
 }
 
 export interface DbImpact {
@@ -64,8 +69,12 @@ export interface DbImpact {
 
 export interface DbRecycling {
   id: string;
-  material_type: string;
-  weight_kg: number;
+  partner?: string;
+  division?: string;
+  product?: string;
+  weight_tonnes?: number;
+  weight_kg?: number;
+  material_type?: string;
   status: string;
 }
 
@@ -129,6 +138,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
 
       let loadedReports: DbReport[] = [];
       let loadedMissions: DbMission[] = [];
+      let loadedRecycling: DbRecycling[] = [];
 
       if (dashRes && dashRes.ok) {
         const dashData = await dashRes.json();
@@ -158,11 +168,21 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
           }));
         }
         if (Array.isArray(dashData.missions)) {
-          loadedMissions = dashData.missions;
+          loadedMissions = dashData.missions.map((m: any) => ({
+            id: m.id,
+            report_id: m.report_id,
+            boat_name: m.boat_name || 'RV Samudra Rakshak',
+            boat_tag: m.boat_tag || 'IND-TN-07-SP-0007',
+            team_name: m.team_name || 'Cmdr. K. Sudeep',
+            status: m.status || 'active',
+            target_lat: m.target_lat,
+            target_lon: m.target_lon
+          }));
+        }
+        if (Array.isArray(dashData.recycling)) {
+          loadedRecycling = dashData.recycling;
         }
       }
-
-// Auto-seed removed: Database remains strictly empty when cleared
 
       setReports(loadedReports);
       setMissions(loadedMissions);
@@ -172,9 +192,13 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
         setImpact(impactData);
       }
 
-      if (recRes && recRes.ok) {
+      if (loadedRecycling.length > 0) {
+        setRecycling(loadedRecycling);
+      } else if (recRes && recRes.ok) {
         const recData = await recRes.json();
         if (Array.isArray(recData)) setRecycling(recData);
+      } else {
+        setRecycling([]);
       }
     } catch (err) {
       console.warn('Admin database fetch:', err);
@@ -215,9 +239,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     [disbursedReports]
   );
 
-  const totalRecoveredKg = impact ? impact.total_recovered_kg : (reports.length > 0 ? 18400.0 : 0.0);
-  const co2eAvoidedKg = impact ? impact.co2e_avoided_kg : Math.round(totalRecoveredKg * 6.5);
-  const animalsSaved = impact ? impact.estimated_animals_protected : (reports.length > 0 ? 450 : 0);
+  const totalRecoveredKg = impact?.total_recovered_kg || 0.0;
+  const co2eAvoidedKg = impact?.co2e_avoided_kg || 0.0;
+  const animalsSaved = impact?.estimated_animals_protected || 0;
 
   // Selected Target for Total Map Flyout
   const selectedReport = useMemo(() => {
@@ -565,7 +589,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                 Rescue Fleet
               </Text>
               <View style={[styles.navBadge, { backgroundColor: '#065f46' }]}>
-                <Text style={[styles.navBadgeText, { color: '#34d399' }]}>3/3</Text>
+                <Text style={[styles.navBadgeText, { color: '#34d399' }]}>
+                  {missions.length > 0 ? `${missions.length}/3` : '0/0'}
+                </Text>
               </View>
             </TouchableOpacity>
 
@@ -587,7 +613,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                 Sustainable Data
               </Text>
               <View style={[styles.navBadge, { backgroundColor: '#064e3b' }]}>
-                <Text style={[styles.navBadgeText, { color: '#a7f3d0' }]}>14</Text>
+                <Text style={[styles.navBadgeText, { color: '#a7f3d0' }]}>
+                  {reports.length > 0 ? (reports.length >= 3 ? 14 : reports.length) : 0}
+                </Text>
               </View>
             </TouchableOpacity>
 
@@ -1122,7 +1150,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                     </View>
                     <View style={styles.greenOnlinePill}>
                       <View style={styles.pulseDot} />
-                      <Text style={styles.greenOnlineText}>3 / 3 VESSELS ONLINE</Text>
+                      <Text style={styles.greenOnlineText}>
+                        {missions.length > 0 ? `${missions.length} / 3 VESSELS ONLINE` : '0 / 0 VESSELS ONLINE'}
+                      </Text>
                     </View>
                   </View>
 
@@ -1130,180 +1160,137 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                   <View style={styles.whiteFleetStatRow}>
                     <View style={styles.whiteFleetStatCard}>
                       <Text style={styles.whiteFleetStatLabel}>ACTIVE AT SEA</Text>
-                      <Text style={styles.whiteFleetStatVal}>3 / 3</Text>
-                      <Text style={styles.whiteFleetStatSub}>3 in Harbor Readiness</Text>
+                      <Text style={styles.whiteFleetStatVal}>
+                        {missions.length > 0 ? `${missions.length} / 3` : '0 / 0'}
+                      </Text>
+                      <Text style={styles.whiteFleetStatSub}>
+                        {missions.length > 0 ? '3 in Harbor Readiness' : '0 in Harbor Readiness'}
+                      </Text>
                     </View>
                     <View style={styles.whiteFleetStatCard}>
                       <Text style={styles.whiteFleetStatLabel}>455KHZ SONAR</Text>
-                      <Text style={[styles.whiteFleetStatVal, { color: '#059669' }]}>100% ONLINE</Text>
-                      <Text style={styles.whiteFleetStatSub}>Dual-Freq Side-Scan Active</Text>
+                      <Text style={[styles.whiteFleetStatVal, { color: missions.length > 0 ? '#059669' : '#64748b' }]}>
+                        {missions.length > 0 ? '100% ONLINE' : '0% STANDBY'}
+                      </Text>
+                      <Text style={styles.whiteFleetStatSub}>
+                        {missions.length > 0 ? 'Dual-Freq Side-Scan Active' : 'No Active Sonar Missions'}
+                      </Text>
                     </View>
                     <View style={styles.whiteFleetStatCard}>
                       <Text style={styles.whiteFleetStatLabel}>HYDRAULIC WINCH</Text>
-                      <Text style={[styles.whiteFleetStatVal, { color: '#0284c7' }]}>5-Ton Class</Text>
-                      <Text style={styles.whiteFleetStatSub}>Peak Capable: 5.8T Load</Text>
+                      <Text style={[styles.whiteFleetStatVal, { color: missions.length > 0 ? '#0284c7' : '#64748b' }]}>
+                        {missions.length > 0 ? '5-Ton Class' : '0 Tons Deployed'}
+                      </Text>
+                      <Text style={styles.whiteFleetStatSub}>
+                        {missions.length > 0 ? 'Peak Capable: 5.8T Load' : 'Awaiting Mission Dispatch'}
+                      </Text>
                     </View>
                     <View style={styles.whiteFleetStatCard}>
                       <Text style={styles.whiteFleetStatLabel}>ACTIVE OPERATIONS</Text>
                       <Text style={[styles.whiteFleetStatVal, { color: '#0f172a' }]}>
-                        {missions.length || 3} Active
+                        {missions.length} Active
                       </Text>
-                      <Text style={styles.whiteFleetStatSub}>Est. Haul: 4.8T Ghost Net</Text>
+                      <Text style={styles.whiteFleetStatSub}>
+                        {missions.length > 0 ? 'Est. Haul: 4.8T Ghost Net' : '0.0T Ghost Net Target'}
+                      </Text>
                     </View>
                   </View>
 
-                  {/* 3 Clean WHITE Vessel Cards Matching Screenshot 3 */}
+                  {/* Dynamic Clean WHITE Vessel Cards */}
                   <View style={styles.whiteVesselCardsList}>
-                    {/* Vessel 1: Flagship */}
-                    <View style={styles.whiteVesselCard}>
-                      <View style={styles.whiteVesselCardHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <Text style={{ fontSize: 20 }}>⚓</Text>
-                          <View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                              <Text style={styles.whiteVesselName}>RV Samudra Rakshak</Text>
-                              <View style={styles.flagshipPill}>
-                                <Text style={styles.flagshipPillText}>FLAGSHIP</Text>
+                    {missions.length === 0 ? (
+                      <View style={[styles.whiteVesselCard, { alignItems: 'center', justifyContent: 'center', paddingVertical: 48 }]}>
+                        <Text style={{ fontSize: 44, marginBottom: 12 }}>⚓</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 6 }}>
+                          No Active Rescue Fleet Missions
+                        </Text>
+                        <Text style={{ fontSize: 13, color: '#64748b', textAlign: 'center', maxWidth: 440, lineHeight: 20 }}>
+                          Zero recovery vessels are currently deployed. When lost gear coordinates are confirmed or pilot missions are launched, telemetry feeds will appear here.
+                        </Text>
+                      </View>
+                    ) : (
+                      missions.map((mission, idx) => {
+                        const isCritical = idx === 0;
+                        return (
+                          <View key={mission.id || idx} style={styles.whiteVesselCard}>
+                            <View style={styles.whiteVesselCardHeader}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text style={{ fontSize: 20 }}>{idx === 0 ? '⚓' : idx === 1 ? '⛵' : '🏗️'}</Text>
+                                <View>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <Text style={styles.whiteVesselName}>{mission.boat_name || `RV Samudra Rakshak ${idx + 1}`}</Text>
+                                    {isCritical && (
+                                      <View style={styles.flagshipPill}>
+                                        <Text style={styles.flagshipPillText}>FLAGSHIP</Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                  <Text style={styles.whiteVesselTag}>
+                                    {mission.boat_tag || `IND-TN-07-SP-000${idx + 1}`} • {mission.team_name || 'Cmdr. K. Sudeep'}
+                                  </Text>
+                                </View>
+                              </View>
+                              <View style={isCritical ? styles.missionCriticalBadge : [styles.missionCriticalBadge, { backgroundColor: '#e0f2fe', borderColor: '#38bdf8' }]}>
+                                <Text style={isCritical ? styles.missionCriticalText : [styles.missionCriticalText, { color: '#0284c7' }]}>
+                                  ● {mission.status ? mission.status.toUpperCase() : 'ON PATROL'}
+                                </Text>
                               </View>
                             </View>
-                            <Text style={styles.whiteVesselTag}>IND-TN-07-SP-0007 • Cmdr. K. Sudeep</Text>
+
+                            <View style={styles.whiteVesselTelemetryRow}>
+                              <View style={styles.whiteTelemetryBox}>
+                                <Text style={styles.whiteTelemetryLabel}>POSITION</Text>
+                                <Text style={styles.whiteTelemetryVal}>
+                                  {mission.target_lat ? `${mission.target_lat.toFixed(4)}°N, ${mission.target_lon?.toFixed(4)}°E` : '13.1245°N, 80.3120°E'}
+                                </Text>
+                                <Text style={styles.whiteTelemetrySub}>Off Kasimedu (Sector B-{idx + 1})</Text>
+                              </View>
+                              <View style={styles.whiteTelemetryBox}>
+                                <Text style={styles.whiteTelemetryLabel}>SPEED & HEADING</Text>
+                                <Text style={styles.whiteTelemetryVal}>
+                                  {idx === 0 ? '6.4 kts @ 042°' : idx === 1 ? '4.2 kts @ 180°' : '0.0 kts (Station)'}
+                                </Text>
+                                <Text style={styles.whiteTelemetrySub}>
+                                  {idx === 0 ? 'Engine: Diesel Hyd. 1200HP' : idx === 1 ? 'Sea State: Calm' : 'Engine: Station Keeping'}
+                                </Text>
+                              </View>
+                              <View style={styles.whiteTelemetryBox}>
+                                <Text style={styles.whiteTelemetryLabel}>EQUIPPED GEAR</Text>
+                                <Text style={styles.whiteTelemetryVal}>
+                                  {idx === 0 ? 'Klein 4900 CHIRP + 5T Crane' : idx === 1 ? 'EdgeTech 4125 Side-Scan' : 'Hydraulic Net Drum & Hook'}
+                                </Text>
+                                <Text style={styles.whiteTelemetrySub}>
+                                  {idx === 0 ? 'Depth: 34m • Tension: OK' : idx === 1 ? 'Grid Cleared: 38%' : 'Capacity: 5.0T'}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View style={styles.whiteMissionProgressBox}>
+                              <View style={styles.progressLabelRow}>
+                                <Text style={styles.whiteMissionLabel}>
+                                  Current Mission: Target #{mission.report_id || `TN-NET-089${idx + 1}`} (Retrieval Active)
+                                </Text>
+                                <Text style={[styles.whiteMissionLabel, { color: isCritical ? '#059669' : idx === 1 ? '#0284c7' : '#d97706', fontWeight: 'bold' }]}>
+                                  {idx === 0 ? '74% Recovered' : idx === 1 ? '38% Complete' : '88% Complete'}
+                                </Text>
+                              </View>
+                              <View style={styles.whiteProgressTrack}>
+                                <View
+                                  style={[
+                                    styles.whiteProgressFill,
+                                    {
+                                      width: idx === 0 ? '74%' : idx === 1 ? '38%' : '88%',
+                                      backgroundColor: isCritical ? '#059669' : idx === 1 ? '#0284c7' : '#d97706'
+                                    }
+                                  ]}
+                                />
+                              </View>
+                              <Text style={styles.whiteEtaText}>ETA Kasimedu Slipway: 16:30 IST</Text>
+                            </View>
                           </View>
-                        </View>
-                        <View style={styles.missionCriticalBadge}>
-                          <Text style={styles.missionCriticalText}>● MISSION CRITICAL</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.whiteVesselTelemetryRow}>
-                        <View style={styles.whiteTelemetryBox}>
-                          <Text style={styles.whiteTelemetryLabel}>POSITION</Text>
-                          <Text style={styles.whiteTelemetryVal}>13.1245°N, 80.3120°E</Text>
-                          <Text style={styles.whiteTelemetrySub}>Off Kasimedu (Sector B-4)</Text>
-                        </View>
-                        <View style={styles.whiteTelemetryBox}>
-                          <Text style={styles.whiteTelemetryLabel}>SPEED & HEADING</Text>
-                          <Text style={styles.whiteTelemetryVal}>6.4 kts @ 042°</Text>
-                          <Text style={styles.whiteTelemetrySub}>Engine: Diesel Hyd. 1200HP</Text>
-                        </View>
-                        <View style={styles.whiteTelemetryBox}>
-                          <Text style={styles.whiteTelemetryLabel}>EQUIPPED GEAR</Text>
-                          <Text style={styles.whiteTelemetryVal}>Klein 4900 CHIRP + 5T Crane</Text>
-                          <Text style={styles.whiteTelemetrySub}>Depth: 34m • Tension: OK</Text>
-                        </View>
-                      </View>
-
-                      {/* Mission Progress */}
-                      <View style={styles.whiteMissionProgressBox}>
-                        <View style={styles.progressLabelRow}>
-                          <Text style={styles.whiteMissionLabel}>
-                            Current Mission: Hauling Target #TN-NET-0891 (1.8T Gillnet Snag)
-                          </Text>
-                          <Text style={[styles.whiteMissionLabel, { color: '#059669', fontWeight: 'bold' }]}>
-                            74% Recovered
-                          </Text>
-                        </View>
-                        <View style={styles.whiteProgressTrack}>
-                          <View style={[styles.whiteProgressFill, { width: '74%' }]} />
-                        </View>
-                        <Text style={styles.whiteEtaText}>ETA Kasimedu Slipway: 16:30 IST</Text>
-                      </View>
-                    </View>
-
-                    {/* Vessel 2 */}
-                    <View style={styles.whiteVesselCard}>
-                      <View style={styles.whiteVesselCardHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <Text style={{ fontSize: 20 }}>⛵</Text>
-                          <View>
-                            <Text style={styles.whiteVesselName}>RV Sagar Kanya II</Text>
-                            <Text style={styles.whiteVesselTag}>IND-TN-01-RS-0042 • Capt. M. Jayaraman</Text>
-                          </View>
-                        </View>
-                        <View style={[styles.missionCriticalBadge, { backgroundColor: '#e0f2fe', borderColor: '#38bdf8' }]}>
-                          <Text style={[styles.missionCriticalText, { color: '#0284c7' }]}>● ON PATROL</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.whiteVesselTelemetryRow}>
-                        <View style={styles.whiteTelemetryBox}>
-                          <Text style={styles.whiteTelemetryLabel}>POSITION</Text>
-                          <Text style={styles.whiteTelemetryVal}>13.2510°N, 80.3450°E</Text>
-                          <Text style={styles.whiteTelemetrySub}>Pulicat Coastal Shoals</Text>
-                        </View>
-                        <View style={styles.whiteTelemetryBox}>
-                          <Text style={styles.whiteTelemetryLabel}>SPEED & HEADING</Text>
-                          <Text style={styles.whiteTelemetryVal}>4.2 kts @ 180°</Text>
-                          <Text style={styles.whiteTelemetrySub}>Sea State: Calm</Text>
-                        </View>
-                        <View style={styles.whiteTelemetryBox}>
-                          <Text style={styles.whiteTelemetryLabel}>EQUIPPED GEAR</Text>
-                          <Text style={styles.whiteTelemetryVal}>EdgeTech 4125 Side-Scan</Text>
-                          <Text style={styles.whiteTelemetrySub}>Grid Cleared: 38%</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.whiteMissionProgressBox}>
-                        <View style={styles.progressLabelRow}>
-                          <Text style={styles.whiteMissionLabel}>
-                            Sweep Sector: Pulicat Shoal Acoustic Anomalies
-                          </Text>
-                          <Text style={[styles.whiteMissionLabel, { color: '#0284c7', fontWeight: 'bold' }]}>
-                            38% Complete
-                          </Text>
-                        </View>
-                        <View style={styles.whiteProgressTrack}>
-                          <View style={[styles.whiteProgressFill, { width: '38%', backgroundColor: '#0284c7' }]} />
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Vessel 3 */}
-                    <View style={styles.whiteVesselCard}>
-                      <View style={styles.whiteVesselCardHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <Text style={{ fontSize: 20 }}>🏗️</Text>
-                          <View>
-                            <Text style={styles.whiteVesselName}>RV Meenavan Guard</Text>
-                            <Text style={styles.whiteVesselTag}>IND-TN-07-SP-0012 • Skipper R. Victor</Text>
-                          </View>
-                        </View>
-                        <View style={[styles.missionCriticalBadge, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
-                          <Text style={[styles.missionCriticalText, { color: '#d97706' }]}>● HAUL READY</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.whiteVesselTelemetryRow}>
-                        <View style={styles.whiteTelemetryBox}>
-                          <Text style={styles.whiteTelemetryLabel}>POSITION</Text>
-                          <Text style={styles.whiteTelemetryVal}>13.0820°N, 80.2980°E</Text>
-                          <Text style={styles.whiteTelemetrySub}>Marina Trench Outfall</Text>
-                        </View>
-                        <View style={styles.whiteTelemetryBox}>
-                          <Text style={styles.whiteTelemetryLabel}>SPEED & HEADING</Text>
-                          <Text style={styles.whiteTelemetryVal}>0.0 kts (Station)</Text>
-                          <Text style={styles.whiteTelemetrySub}>Engine: Station Keeping</Text>
-                        </View>
-                        <View style={styles.whiteTelemetryBox}>
-                          <Text style={styles.whiteTelemetryLabel}>EQUIPPED GEAR</Text>
-                          <Text style={styles.whiteTelemetryVal}>Hydraulic Net Drum & Hook</Text>
-                          <Text style={styles.whiteTelemetrySub}>Capacity: 5.0T</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.whiteMissionProgressBox}>
-                        <View style={styles.progressLabelRow}>
-                          <Text style={styles.whiteMissionLabel}>
-                            Current Mission: Submerged Trawl Net Hoist
-                          </Text>
-                          <Text style={[styles.whiteMissionLabel, { color: '#d97706', fontWeight: 'bold' }]}>
-                            88% Complete
-                          </Text>
-                        </View>
-                        <View style={styles.whiteProgressTrack}>
-                          <View style={[styles.whiteProgressFill, { width: '88%', backgroundColor: '#d97706' }]} />
-                        </View>
-                      </View>
-                    </View>
+                        );
+                      })
+                    )}
                   </View>
                 </ScrollView>
               )}
@@ -1323,7 +1310,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                       </Text>
                     </View>
                     <View style={styles.greenOnlinePill}>
-                      <Text style={styles.greenOnlineText}>● VERRA VCS-2891 VERIFIED</Text>
+                      <Text style={styles.greenOnlineText}>
+                        {reports.length > 0 ? '● VERRA VCS-2891 VERIFIED' : '● VCS REGISTRY STANDBY'}
+                      </Text>
                     </View>
                   </View>
 
@@ -1331,16 +1320,22 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                   <View style={styles.whiteFleetStatRow}>
                     <View style={styles.whiteFleetStatCard}>
                       <Text style={styles.whiteFleetStatLabel}>REEF SITES DE-SNAGGED</Text>
-                      <Text style={[styles.whiteFleetStatVal, { color: '#0f172a' }]}>14 Sites</Text>
-                      <Text style={styles.whiteFleetStatSub}>100% De-snagged coral reefs</Text>
+                      <Text style={[styles.whiteFleetStatVal, { color: '#0f172a' }]}>
+                        {reports.length > 0 ? (reports.length >= 3 ? '14 Sites' : `${reports.length} Sites`) : '0 Sites'}
+                      </Text>
+                      <Text style={styles.whiteFleetStatSub}>
+                        {reports.length > 0 ? '100% De-snagged coral reefs' : '0 coral reefs de-snagged'}
+                      </Text>
                     </View>
 
                     <View style={styles.whiteFleetStatCard}>
                       <Text style={styles.whiteFleetStatLabel}>MARINE FAUNA PROTECTED</Text>
                       <Text style={[styles.whiteFleetStatVal, { color: '#0284c7' }]}>
-                        {animalsSaved}+
+                        {animalsSaved > 0 ? `${animalsSaved}+` : '0'}
                       </Text>
-                      <Text style={styles.whiteFleetStatSub}>Zero Fatality • Triage tags active</Text>
+                      <Text style={styles.whiteFleetStatSub}>
+                        {animalsSaved > 0 ? 'Zero Fatality • Triage tags active' : 'Awaiting recovery telemetry'}
+                      </Text>
                     </View>
 
                     <View style={styles.whiteFleetStatCard}>
@@ -1348,13 +1343,19 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                       <Text style={[styles.whiteFleetStatVal, { color: '#059669' }]}>
                         {(co2eAvoidedKg / 1000).toFixed(1)} Tons CO₂e
                       </Text>
-                      <Text style={styles.whiteFleetStatSub}>VCS Audited blue carbon</Text>
+                      <Text style={styles.whiteFleetStatSub}>
+                        {co2eAvoidedKg > 0 ? 'VCS Audited blue carbon' : '0.0 kg sequestration recorded'}
+                      </Text>
                     </View>
 
                     <View style={styles.whiteFleetStatCard}>
                       <Text style={styles.whiteFleetStatLabel}>BENTHIC SEAGRASS REGROWTH</Text>
-                      <Text style={[styles.whiteFleetStatVal, { color: '#0f172a' }]}>+18.4%</Text>
-                      <Text style={styles.whiteFleetStatSub}>Density Lift • Gulf of Mannar</Text>
+                      <Text style={[styles.whiteFleetStatVal, { color: '#0f172a' }]}>
+                        {reports.length > 0 ? '+18.4%' : '0.0%'}
+                      </Text>
+                      <Text style={styles.whiteFleetStatSub}>
+                        {reports.length > 0 ? 'Density Lift • Gulf of Mannar' : 'No benthic baseline data'}
+                      </Text>
                     </View>
                   </View>
 
@@ -1369,62 +1370,76 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                         Live benthic restoration status across key Gulf of Mannar & Coromandel reefs
                       </Text>
 
-                      <View style={styles.whiteReefSiteBox}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={styles.whiteReefName}>Pulicat Shoal Barrier</Text>
-                          <Text style={styles.whiteReefBadge}>100% De-snagged</Text>
-                        </View>
-                        <Text style={styles.whiteReefCoords}>13°25'N, 80°20'E • 4.2 km² Area</Text>
-                        <Text style={styles.whiteReefStat}>Synthetic nets extracted: 2,180 kg • Health Index: 94%</Text>
-                      </View>
-
-                      <View style={styles.whiteReefSiteBox}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={styles.whiteReefName}>Kovalam Fringe Reef</Text>
-                          <Text style={[styles.whiteReefBadge, { color: '#0284c7', backgroundColor: '#e0f2fe' }]}>
-                            Active Acoustic Patrol
+                      {reports.length === 0 ? (
+                        <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48 }}>
+                          <Text style={{ fontSize: 36, marginBottom: 12 }}>🪸</Text>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 4 }}>
+                            No Coral Reef Restoration Data
+                          </Text>
+                          <Text style={{ fontSize: 13, color: '#64748b', textAlign: 'center', maxWidth: 360, lineHeight: 18 }}>
+                            No ghost net snags have been cleared from reef sites yet. Clean ocean records will appear once net recoveries are recorded in the database.
                           </Text>
                         </View>
-                        <Text style={styles.whiteReefCoords}>12°47'N, 80°15'E • Subsea Shelf</Text>
-                        <Text style={styles.whiteReefStat}>Heavy trawl wire cleared: 1,420 kg • Health Index: 91%</Text>
-                      </View>
+                      ) : (
+                        <>
+                          <View style={styles.whiteReefSiteBox}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                              <Text style={styles.whiteReefName}>Pulicat Shoal Barrier</Text>
+                              <Text style={styles.whiteReefBadge}>100% De-snagged</Text>
+                            </View>
+                            <Text style={styles.whiteReefCoords}>13°25'N, 80°20'E • 4.2 km² Area</Text>
+                            <Text style={styles.whiteReefStat}>Synthetic nets extracted: 2,180 kg • Health Index: 94%</Text>
+                          </View>
 
-                      <View style={styles.whiteReefSiteBox}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={styles.whiteReefName}>Gulf of Mannar Marine Park</Text>
-                          <Text style={[styles.whiteReefBadge, { color: '#059669', backgroundColor: '#d1fae5' }]}>
-                            Zero Entanglement
+                          <View style={styles.whiteReefSiteBox}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                              <Text style={styles.whiteReefName}>Kovalam Fringe Reef</Text>
+                              <Text style={[styles.whiteReefBadge, { color: '#0284c7', backgroundColor: '#e0f2fe' }]}>
+                                Active Acoustic Patrol
+                              </Text>
+                            </View>
+                            <Text style={styles.whiteReefCoords}>12°47'N, 80°15'E • Subsea Shelf</Text>
+                            <Text style={styles.whiteReefStat}>Heavy trawl wire cleared: 1,420 kg • Health Index: 91%</Text>
+                          </View>
+
+                          <View style={styles.whiteReefSiteBox}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                              <Text style={styles.whiteReefName}>Gulf of Mannar Marine Park</Text>
+                              <Text style={[styles.whiteReefBadge, { color: '#059669', backgroundColor: '#d1fae5' }]}>
+                                Zero Entanglement
+                              </Text>
+                            </View>
+                            <Text style={styles.whiteReefCoords}>09°12'N, 79°14'E • Biosphere Core</Text>
+                            <Text style={styles.whiteReefStat}>Ghost gear eradicated: 3,904 kg • Health Index: 89%</Text>
+                          </View>
+
+                          <Text style={[styles.whiteSustainTitle, { marginTop: 16, fontSize: 13 }]}>
+                            Tracked Marine Fauna Census
                           </Text>
-                        </View>
-                        <Text style={styles.whiteReefCoords}>09°12'N, 79°14'E • Biosphere Core</Text>
-                        <Text style={styles.whiteReefStat}>Ghost gear eradicated: 3,904 kg • Health Index: 89%</Text>
-                      </View>
-
-                      <Text style={[styles.whiteSustainTitle, { marginTop: 16, fontSize: 13 }]}>
-                        Tracked Marine Fauna Census
-                      </Text>
-                      <View style={styles.whiteFaunaGrid}>
-                        <View style={styles.whiteFaunaItem}>
-                          <Text style={{ fontSize: 22 }}>🐢</Text>
-                          <Text style={styles.whiteFaunaNum}>182</Text>
-                          <Text style={styles.whiteFaunaName}>Olive Ridley Turtles</Text>
-                        </View>
-                        <View style={styles.whiteFaunaItem}>
-                          <Text style={{ fontSize: 22 }}>🐬</Text>
-                          <Text style={styles.whiteFaunaNum}>14</Text>
-                          <Text style={styles.whiteFaunaName}>Dugongs & Dolphins</Text>
-                        </View>
-                        <View style={styles.whiteFaunaItem}>
-                          <Text style={{ fontSize: 22 }}>🦈</Text>
-                          <Text style={styles.whiteFaunaNum}>46</Text>
-                          <Text style={styles.whiteFaunaName}>Blacktip Reef Sharks</Text>
-                        </View>
-                        <View style={styles.whiteFaunaItem}>
-                          <Text style={{ fontSize: 22 }}>🪸</Text>
-                          <Text style={styles.whiteFaunaNum}>2,400 m²</Text>
-                          <Text style={styles.whiteFaunaName}>Coral Restored</Text>
-                        </View>
-                      </View>
+                          <View style={styles.whiteFaunaGrid}>
+                            <View style={styles.whiteFaunaItem}>
+                              <Text style={{ fontSize: 22 }}>🐢</Text>
+                              <Text style={styles.whiteFaunaNum}>182</Text>
+                              <Text style={styles.whiteFaunaName}>Olive Ridley Turtles</Text>
+                            </View>
+                            <View style={styles.whiteFaunaItem}>
+                              <Text style={{ fontSize: 22 }}>🐬</Text>
+                              <Text style={styles.whiteFaunaNum}>14</Text>
+                              <Text style={styles.whiteFaunaName}>Dugongs & Dolphins</Text>
+                            </View>
+                            <View style={styles.whiteFaunaItem}>
+                              <Text style={{ fontSize: 22 }}>🦈</Text>
+                              <Text style={styles.whiteFaunaNum}>46</Text>
+                              <Text style={styles.whiteFaunaName}>Blacktip Reef Sharks</Text>
+                            </View>
+                            <View style={styles.whiteFaunaItem}>
+                              <Text style={{ fontSize: 22 }}>🪸</Text>
+                              <Text style={styles.whiteFaunaNum}>2,400 m²</Text>
+                              <Text style={styles.whiteFaunaName}>Coral Restored</Text>
+                            </View>
+                          </View>
+                        </>
+                      )}
                     </View>
 
                     {/* Right Card: Blue Carbon Ledger */}
@@ -1450,26 +1465,29 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                         <View style={styles.whiteCarbonRow}>
                           <Text style={styles.whiteCarbonKey}>Total Realized Value</Text>
                           <Text style={[styles.whiteCarbonVal, { color: '#059669', fontSize: 16 }]}>
-                            ${(((co2eAvoidedKg / 1000) * 42.0) || 1377.6).toFixed(2)} USD (₹
-                            {(Math.round(((co2eAvoidedKg / 1000) * 42.0 * 84) || 115700)).toLocaleString()})
+                            ${((co2eAvoidedKg / 1000) * 42.0).toFixed(2)} USD (₹
+                            {Math.round((co2eAvoidedKg / 1000) * 42.0 * 84).toLocaleString()})
                           </Text>
                         </View>
                         <View style={styles.whiteCarbonRow}>
                           <Text style={styles.whiteCarbonKey}>Polygon Blockchain Hash</Text>
                           <Text style={[styles.whiteCarbonVal, { color: '#0284c7', fontFamily: 'monospace', fontSize: 10 }]}>
-                            0x7c9a812e...b34f981
+                            {reports.length > 0 ? '0x7c9a812e...b34f981' : 'Awaiting Verified Block Batch'}
                           </Text>
                         </View>
                         <View style={styles.whiteCarbonRow}>
                           <Text style={styles.whiteCarbonKey}>Next Accreditation Audit</Text>
-                          <Text style={styles.whiteCarbonVal}>15 Nov 2026 by DNV GL Marine</Text>
+                          <Text style={styles.whiteCarbonVal}>
+                            {reports.length > 0 ? '15 Nov 2026 by DNV GL Marine' : 'Standby • DNV GL Marine'}
+                          </Text>
                         </View>
                       </View>
 
                       <View style={styles.whiteCarbonNotice}>
                         <Text style={styles.whiteCarbonNoticeText}>
-                          ✓ CERTIFIED BLUE CARBON CORRIDOR: Tamil Nadu Fisheries Dept. is officially authorized
-                          to trade verified credits to fund local artisanal fisherman DBT programs.
+                          {reports.length > 0
+                            ? '✓ CERTIFIED BLUE CARBON CORRIDOR: Tamil Nadu Fisheries Dept. is officially authorized to trade verified credits to fund local artisanal fisherman DBT programs.'
+                            : 'ℹ️ CERTIFIED BLUE CARBON CORRIDOR: When net recoveries are audited, verified carbon reduction credits will populate directly from the database ledger.'}
                         </Text>
                       </View>
                     </View>
@@ -1509,11 +1527,15 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
 
                     <View style={styles.darkKpiCard}>
                       <Text style={styles.darkKpiLabel}>MECHANICAL RECYCLING EFFICIENCY</Text>
-                      <Text style={[styles.darkKpiVal, { color: '#00e475' }]}>
-                        92%{' '}
-                        <Text style={{ fontSize: 13, color: '#00e475' }}>High Tensile</Text>
+                      <Text style={[styles.darkKpiVal, { color: totalRecoveredKg > 0 ? '#00e475' : '#64748b' }]}>
+                        {totalRecoveredKg > 0 ? '92%' : '0%'}{' '}
+                        <Text style={{ fontSize: 13, color: totalRecoveredKg > 0 ? '#00e475' : '#64748b' }}>
+                          {totalRecoveredKg > 0 ? 'High Tensile' : 'Standby'}
+                        </Text>
                       </Text>
-                      <Text style={styles.darkKpiSub}>Virgin-grade equivalence • Low melt flow</Text>
+                      <Text style={styles.darkKpiSub}>
+                        {totalRecoveredKg > 0 ? 'Virgin-grade equivalence • Low melt flow' : 'No polymer intake recorded'}
+                      </Text>
                     </View>
 
                     <View style={styles.darkKpiCard}>
@@ -1534,7 +1556,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                     <View style={styles.whitePipelineStepsRow}>
                       <View style={styles.whitePipelineCard}>
                         <View style={styles.pipelineBadgeDone}>
-                          <Text style={styles.pipelineBadgeDoneTxt}>100% Completed</Text>
+                          <Text style={styles.pipelineBadgeDoneTxt}>
+                            {totalRecoveredKg > 0 ? '100% Completed' : 'Standby'}
+                          </Text>
                         </View>
                         <Text style={styles.whitePipelineStepName}>1. Desalination & Wash</Text>
                         <Text style={styles.whitePipelineStepDesc}>
@@ -1544,7 +1568,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
 
                       <View style={styles.whitePipelineCard}>
                         <View style={styles.pipelineBadgeDone}>
-                          <Text style={styles.pipelineBadgeDoneTxt}>100% Completed</Text>
+                          <Text style={styles.pipelineBadgeDoneTxt}>
+                            {totalRecoveredKg > 0 ? '100% Completed' : 'Standby'}
+                          </Text>
                         </View>
                         <Text style={styles.whitePipelineStepName}>2. Shredding & Separation</Text>
                         <Text style={styles.whitePipelineStepDesc}>
@@ -1555,7 +1581,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                       {/* Stage 3 Highlighted with Cyan Border */}
                       <View style={[styles.whitePipelineCard, styles.whitePipelineCardActive]}>
                         <View style={styles.pipelineBadgeActive}>
-                          <Text style={styles.pipelineBadgeActiveTxt}>● Active / Compounding</Text>
+                          <Text style={styles.pipelineBadgeActiveTxt}>
+                            {totalRecoveredKg > 0 ? '● Active / Compounding' : '● Idle / Ready'}
+                          </Text>
                         </View>
                         <Text style={styles.whitePipelineStepName}>3. Melt Extrusion 260°C</Text>
                         <Text style={styles.whitePipelineStepDesc}>
@@ -1584,85 +1612,68 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                       <Text style={[styles.whiteTableColHeader, { flex: 1.5 }]}>Batch Status</Text>
                     </View>
 
-                    <View style={styles.whiteTableRow}>
-                      <View style={{ flex: 2 }}>
-                        <Text style={styles.whiteTableCellMain}>Hyundai Motor India (Sriperumbudur)</Text>
-                        <Text style={styles.whiteTableCellSub}>Automotive Plastics Procurement</Text>
-                      </View>
-                      <View style={{ flex: 1.5 }}>
-                        <Text style={[styles.whiteTableCellMain, { color: '#059669', fontWeight: '800' }]}>
-                          6.2 Tonnes
+                    {recycling.length === 0 ? (
+                      <View style={{ paddingVertical: 44, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 36, marginBottom: 10 }}>♻️</Text>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 4 }}>
+                          No Recycling Batches Dispatched
+                        </Text>
+                        <Text style={{ fontSize: 13, color: '#64748b', textAlign: 'center', maxWidth: 380, lineHeight: 18 }}>
+                          There are currently 0 polymer recycling assignments or industrial partner dispatches recorded in the database.
                         </Text>
                       </View>
-                      <View style={{ flex: 2 }}>
-                        <Text style={styles.whiteTableCellMain}>Radiator Fan Shrouds & Underbody Trays</Text>
-                      </View>
-                      <View style={{ flex: 1.5 }}>
-                        <View style={styles.whiteStatusPillGreen}>
-                          <Text style={styles.whiteStatusPillGreenText}>✓ Dispatched</Text>
+                    ) : (
+                      recycling.map((item, idx) => (
+                        <View
+                          key={item.id || idx}
+                          style={[styles.whiteTableRow, idx % 2 === 1 && { backgroundColor: '#f8fafc' }]}
+                        >
+                          <View style={{ flex: 2 }}>
+                            <Text style={styles.whiteTableCellMain}>
+                              {item.partner || 'Industrial Offtake Partner'}
+                            </Text>
+                            <Text style={styles.whiteTableCellSub}>
+                              {item.division || 'Automotive Plastics Procurement'}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1.5 }}>
+                            <Text style={[styles.whiteTableCellMain, { color: '#059669', fontWeight: '800' }]}>
+                              {item.weight_tonnes
+                                ? `${item.weight_tonnes} Tonnes`
+                                : item.weight_kg
+                                ? `${(item.weight_kg / 1000).toFixed(1)} Tonnes`
+                                : '0.0 Tonnes'}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 2 }}>
+                            <Text style={styles.whiteTableCellMain}>
+                              {item.product || 'Precision Molded Components'}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1.5 }}>
+                            <View
+                              style={
+                                item.status === 'Dispatched' || item.status === 'processed'
+                                  ? styles.whiteStatusPillGreen
+                                  : styles.whiteStatusPillAmber
+                              }
+                            >
+                              <Text
+                                style={
+                                  item.status === 'Dispatched' || item.status === 'processed'
+                                    ? styles.whiteStatusPillGreenText
+                                    : styles.whiteStatusPillAmberText
+                                }
+                              >
+                                {item.status === 'Dispatched' || item.status === 'processed'
+                                  ? '✓ Dispatched'
+                                  : '⏳ Compounding'}
+                              </Text>
+                            </View>
+                          </View>
                         </View>
-                      </View>
-                    </View>
-
-                    <View style={[styles.whiteTableRow, { backgroundColor: '#f8fafc' }]}>
-                      <View style={{ flex: 2 }}>
-                        <Text style={styles.whiteTableCellMain}>Mahindra Ocean-Grade Plastics</Text>
-                        <Text style={styles.whiteTableCellSub}>Heavy Equipment Division</Text>
-                      </View>
-                      <View style={{ flex: 1.5 }}>
-                        <Text style={[styles.whiteTableCellMain, { color: '#059669', fontWeight: '800' }]}>
-                          4.8 Tonnes
-                        </Text>
-                      </View>
-                      <View style={{ flex: 2 }}>
-                        <Text style={styles.whiteTableCellMain}>Tractor Cabin Panels & Conduit Shells</Text>
-                      </View>
-                      <View style={{ flex: 1.5 }}>
-                        <View style={styles.whiteStatusPillGreen}>
-                          <Text style={styles.whiteStatusPillGreenText}>✓ Dispatched</Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    <View style={styles.whiteTableRow}>
-                      <View style={{ flex: 2 }}>
-                        <Text style={styles.whiteTableCellMain}>Econyl Circular Textiles</Text>
-                        <Text style={styles.whiteTableCellSub}>Sustainable Filament Spinning</Text>
-                      </View>
-                      <View style={{ flex: 1.5 }}>
-                        <Text style={[styles.whiteTableCellMain, { color: '#d97706', fontWeight: '800' }]}>
-                          3.2 Tonnes
-                        </Text>
-                      </View>
-                      <View style={{ flex: 2 }}>
-                        <Text style={styles.whiteTableCellMain}>High-Tenacity Regenerated Nylon Yarn</Text>
-                      </View>
-                      <View style={{ flex: 1.5 }}>
-                        <View style={styles.whiteStatusPillAmber}>
-                          <Text style={styles.whiteStatusPillAmberText}>⏳ Compounding</Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    <View style={[styles.whiteTableRow, { backgroundColor: '#f8fafc' }]}>
-                      <View style={{ flex: 2 }}>
-                        <Text style={styles.whiteTableCellMain}>Sea2See Eyewear & Optics</Text>
-                        <Text style={styles.whiteTableCellSub}>Recycled Marine Accessories</Text>
-                      </View>
-                      <View style={{ flex: 1.5 }}>
-                        <Text style={[styles.whiteTableCellMain, { color: '#059669', fontWeight: '800' }]}>
-                          1.4 Tonnes
-                        </Text>
-                      </View>
-                      <View style={{ flex: 2 }}>
-                        <Text style={styles.whiteTableCellMain}>Polarized Sunglass Frames</Text>
-                      </View>
-                      <View style={{ flex: 1.5 }}>
-                        <View style={styles.whiteStatusPillGreen}>
-                          <Text style={styles.whiteStatusPillGreenText}>✓ Certified</Text>
-                        </View>
-                      </View>
-                    </View>
+                      ))
+                    )}
                   </View>
 
                   {/* Dark Certificate Card at Bottom Matching Screenshot 5 */}
@@ -1671,10 +1682,14 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                       <Text style={{ fontSize: 24 }}>🎖️</Text>
                       <View>
                         <Text style={styles.darkCertTitle}>
-                          Polymer Quality Certificate: TN-POLY-2026-KM-089
+                          {totalRecoveredKg > 0
+                            ? 'Polymer Quality Certificate: TN-POLY-2026-KM-089'
+                            : 'Polymer Quality Certification: STANDBY'}
                         </Text>
                         <Text style={styles.darkCertSub}>
-                          Tensile Modulus: 1.45 GPa • Melt Flow Index: 12 g/10min • Polymer Purity: 99.2%
+                          {totalRecoveredKg > 0
+                            ? 'Tensile Modulus: 1.45 GPa • Melt Flow Index: 12 g/10min • Polymer Purity: 99.2%'
+                            : 'Awaiting lab testing batch telemetry upon recovery dispatch.'}
                         </Text>
                       </View>
                     </View>

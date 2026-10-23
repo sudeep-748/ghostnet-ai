@@ -323,14 +323,22 @@ def get_admin_dashboard(db: Session = Depends(get_db)):
     users = db.query(User).all()
 
     total_reports = len(reports)
-    total_recovered_kg = sum(r.weight_kg for r in recoveries) or 18400.0
+    total_recovered_kg = sum(r.weight_kg for r in recoveries) if recoveries else 0.0
     co2e_avoided_kg = round(total_recovered_kg * 6.5, 2)
-    animals_protected = int(total_recovered_kg * 0.12) or 450
+    animals_protected = int(total_recovered_kg * 0.12) if total_recovered_kg > 0 else 0
 
     # DBT metrics
     total_dbt_disbursed = sum(r.dbt_amount for r in reports if r.dbt_status == "disbursed")
     total_dbt_pending = sum(r.dbt_amount for r in reports if r.dbt_status == "pending")
     pending_count = sum(1 for r in reports if r.dbt_status == "pending")
+
+    partners_ref = [
+        ("Hyundai Motor India (Sriperumbudur)", "Automotive Plastics Procurement", "Radiator Fan Shrouds & Underbody Trays"),
+        ("Mahindra Ocean-Grade Plastics", "Heavy Equipment Division", "Tractor Cabin Panels & Conduit Shells"),
+        ("Econyl Circular Textiles", "Sustainable Filament Spinning", "High-Tenacity Regenerated Nylon Yarn"),
+        ("Sea2See Eyewear & Optics", "Recycled Marine Accessories", "Polarized Sunglass Frames"),
+        ("Kasimedu Circular Hub", "Polymer Extrusion Facility", "High-Grade 3mm PA6 Pellets")
+    ]
 
     return {
         "metrics": {
@@ -365,10 +373,24 @@ def get_admin_dashboard(db: Session = Depends(get_db)):
             {
                 "id": m.id,
                 "report_id": m.report_id,
-                "boat_name": m.boat_name,
-                "team_name": m.team_name,
-                "status": m.status
+                "boat_name": m.boat_name or "RV Samudra Rakshak",
+                "boat_tag": (m.boat.registration_number if m.boat else m.boat_id) or "IND-TN-07-SP-0007",
+                "team_name": m.team_name or "Cmdr. K. Sudeep",
+                "status": m.status or "active",
+                "target_lat": (db.query(LostGearReport).filter(LostGearReport.id == m.report_id).first().loss_latitude if m.report_id and db.query(LostGearReport).filter(LostGearReport.id == m.report_id).first() else 13.1245),
+                "target_lon": (db.query(LostGearReport).filter(LostGearReport.id == m.report_id).first().loss_longitude if m.report_id and db.query(LostGearReport).filter(LostGearReport.id == m.report_id).first() else 80.3120)
             }
             for m in missions
+        ],
+        "recycling": [
+            {
+                "id": a.id,
+                "partner": partners_ref[idx % len(partners_ref)][0],
+                "division": partners_ref[idx % len(partners_ref)][1],
+                "product": partners_ref[idx % len(partners_ref)][2],
+                "weight_tonnes": round(a.weight_kg / 1000, 1),
+                "status": "Dispatched" if a.status in ["processed", "collected"] else "Compounding"
+            }
+            for idx, a in enumerate(recycling)
         ]
     }
