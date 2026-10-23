@@ -4894,22 +4894,29 @@ export default function App() {
 
           {/* SINGLE PROMINENT HIGH-RESOLUTION ECHOGRAM DISPLAY (NO THUMBNAIL CAROUSEL) */}
           <View style={{
+            height: 290,
+            maxWidth: 530,
+            width: '100%',
+            alignSelf: 'center',
             borderRadius: 12,
             borderWidth: 2,
             borderColor: activeTarget.isNetConfirmed ? '#00e475' : '#00f2fe',
             overflow: 'hidden',
             backgroundColor: '#020617',
             marginBottom: 10,
-            position: 'relative',
-            width: '100%',
-            aspectRatio: 512 / 280
+            position: 'relative'
           }}>
             <Image
               source={PASS_IMAGES[currentSurveyPass] || SONAR_IMG}
+              resizeMode="contain"
               style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
                 width: '100%',
-                height: '100%',
-                resizeMode: 'contain'
+                height: '100%'
               }}
             />
 
