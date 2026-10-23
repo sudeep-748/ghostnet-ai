@@ -18,6 +18,129 @@ import { StatusBar } from 'expo-status-bar';
 const LOGO_IMG = require('./assets/logo.png');
 const SONAR_IMG = require('./assets/sonar_echogram.png');
 
+const PASS_IMAGES: Record<number, any> = {
+  1: require('./assets/passes/pass1.jpg'),
+  2: require('./assets/passes/pass2.jpg'),
+  3: require('./assets/passes/pass3.jpg'),
+  4: require('./assets/passes/pass4.jpg'),
+  5: require('./assets/passes/pass5.jpg'),
+  6: require('./assets/passes/pass6.jpg'),
+  7: require('./assets/passes/pass7.jpg'),
+  8: require('./assets/passes/pass8.jpg')
+};
+
+export interface SurveyPassMeta {
+  passIndex: number;
+  name: string;
+  desc: string;
+  depthM: number;
+  confidence: number;
+  isNet: boolean;
+  substrate: string;
+  verdict: string;
+  speedKn: number;
+  coords: string;
+}
+
+const SURVEY_PASSES_DATA: Record<number, SurveyPassMeta> = {
+  1: {
+    passIndex: 1,
+    name: 'Survey_Sector04_Pass01.xtf',
+    desc: '0h Sector • Soft Silt Mud Bed',
+    depthM: 33.8,
+    confidence: 0.042,
+    isNet: false,
+    substrate: 'Soft Silt Mud',
+    verdict: 'Clear Seabed • Natural Silt Acoustic Noise (No Net)',
+    speedKn: 3.2,
+    coords: '12°34\'40.0"N 82°33\'27.4"E'
+  },
+  2: {
+    passIndex: 2,
+    name: 'Survey_Sector04_Pass02.xtf',
+    desc: '+6h Search Pass • Fine Grain Sand',
+    depthM: 34.0,
+    confidence: 0.068,
+    isNet: false,
+    substrate: 'Fine Grain Sand',
+    verdict: 'Clear Seabed • Uniform Sand Scatter (No Net)',
+    speedKn: 3.2,
+    coords: '12°35\'00.6"N 82°33\'37.8"E'
+  },
+  3: {
+    passIndex: 3,
+    name: 'Survey_Sector04_Pass03.xtf',
+    desc: '+12h Search Pass • Current Sand Ripples',
+    depthM: 34.1,
+    confidence: 0.091,
+    isNet: false,
+    substrate: 'Current Sand Ripples',
+    verdict: 'Natural Benthic Texture • Current Sand Ripples',
+    speedKn: 3.1,
+    coords: '12°35\'21.1"N 82°33\'50.4"E'
+  },
+  4: {
+    passIndex: 4,
+    name: 'Survey_Sector04_Pass04.xtf',
+    desc: '+18h Search Pass • Coarse Shelly Gravel',
+    depthM: 34.2,
+    confidence: 0.125,
+    isNet: false,
+    substrate: 'Coarse Shelly Gravel',
+    verdict: 'Geological Clutter • Coarse Shelly Gravel (Negative)',
+    speedKn: 3.0,
+    coords: '12°35\'42.0"N 82°34\'03.0"E'
+  },
+  5: {
+    passIndex: 5,
+    name: 'Survey_Sector04_Pass05.xtf',
+    desc: '+24h Forecast • Limestone Reef Outcrop',
+    depthM: 34.3,
+    confidence: 0.184,
+    isNet: false,
+    substrate: 'Limestone Reef Ridge',
+    verdict: 'Natural Geologic Ridge • Hard Limestone Substrate',
+    speedKn: 3.0,
+    coords: '12°36\'06.5"N 82°34\'17.8"E'
+  },
+  6: {
+    passIndex: 6,
+    name: 'Survey_Sector04_Pass06.xtf',
+    desc: '+30h Search Pass • Sand Waves & Swells',
+    depthM: 34.3,
+    confidence: 0.079,
+    isNet: false,
+    substrate: 'Sand Waves & Swells',
+    verdict: 'Uniform Seabed • Sand Waves & Swell Formations',
+    speedKn: 3.1,
+    coords: '12°36\'27.0"N 82°34\'23.5"E'
+  },
+  7: {
+    passIndex: 7,
+    name: 'Survey_Sector04_Pass07.xtf',
+    desc: '+36h Search Pass • Benthic Transition',
+    depthM: 34.4,
+    confidence: 0.141,
+    isNet: false,
+    substrate: 'Benthic Transition Mud-Sand',
+    verdict: 'Benthic Transition Zone • Natural Sediment Boundary',
+    speedKn: 3.1,
+    coords: '12°36\'46.8"N 82°34\'30.0"E'
+  },
+  8: {
+    passIndex: 8,
+    name: 'Survey_Sector04_Pass08.xtf',
+    desc: '+42h Forecast Zone • Confirmed Ghost Net Target',
+    depthM: 24.5,
+    confidence: 0.964,
+    isNet: true,
+    substrate: 'Limestone Reef Snag',
+    verdict: '🎯 YOLOv8 CONFIRMED: GHOST NET MATCH 96.4%!',
+    speedKn: 0.0,
+    coords: '13°07\'42.1"N 80°18\'09.4"E'
+  }
+};
+
 import {
   saveSonarAuditLogOffline,
   parseXtfBinaryToEchogram,
@@ -739,6 +862,60 @@ export default function App() {
   const [isScanningBatch, setIsScanningBatch] = useState<boolean>(false);
   const [detectedNetTarget, setDetectedNetTarget] = useState<SonarNetTarget | null>(null);
   const [isNetMarkedOnMap, setIsNetMarkedOnMap] = useState<boolean>(false);
+  const [currentSurveyPass, setCurrentSurveyPass] = useState<number>(1);
+  const [isAutoScanningSweep, setIsAutoScanningSweep] = useState<boolean>(false);
+
+  // Autonomous pass-by-pass sonar sweep loop
+  useEffect(() => {
+    let timer: any = null;
+    if (isAutoScanningSweep) {
+      timer = setInterval(() => {
+        setCurrentSurveyPass((prev) => {
+          if (prev < 8) {
+            const nextPass = prev + 1;
+            const meta = SURVEY_PASSES_DATA[nextPass];
+            if (meta) {
+              setRescueCoords((rc) => ({ ...rc, speedKn: meta.speedKn }));
+            }
+            if (nextPass === 8) {
+              // Net Confirmed!
+              setIsAutoScanningSweep(false);
+              setIsNetMarkedOnMap(true);
+              setRescueCoords((rc) => ({ ...rc, speedKn: 0.0 })); // Boat STOPS!
+              setBoatApproachDistanceM(0);
+              setDetectedNetTarget({
+                id: 'yolo-xtf-pass8-confirmed',
+                fileName: 'Survey_Sector04_Pass08.xtf',
+                imageUri: '',
+                isNetConfirmed: true,
+                modelName: 'YOLOv8-Marine ALDFG (455kHz)',
+                confidence: 0.964,
+                detectedGear: 'Monofilament Gillnet Snag Cluster',
+                seabedDepthM: 24.5,
+                netElevationM: 4.2,
+                acousticShadowLengthM: 16.7,
+                hookTargetDepthM: 20.3,
+                cableScopeM: 68.6,
+                winchLoadKg: 475,
+                bottomSubstrate: 'Limestone Reef Snag',
+                gpsCoordinates: selectedTarget?.coords || '13°07\'42.1"N 80°18\'09.4"E',
+                primaryBox: { classId: 0, className: 'ghost_net', confidence: 0.964, x: 55.5, y: 21, width: 29, height: 59 },
+                timestamp: Date.now()
+              });
+              showToast('🎯 TARGET LOCKED! YOLOv8 96.4% MATCH! Vessel holding station. Recovery Protocol loaded.');
+            }
+            return nextPass;
+          } else {
+            setIsAutoScanningSweep(false);
+            return 8;
+          }
+        });
+      }, 1800);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isAutoScanningSweep, selectedTarget]);
   const [boatApproachDistanceM, setBoatApproachDistanceM] = useState<number>(240);
 
   const processAndRunYoloDetection = async (files: any[]) => {
@@ -2510,17 +2687,8 @@ export default function App() {
                  '<b>Longitude:</b> ' + boatPos[1].toFixed(5) + '° E<br>' +
                  '<span style="color:#00f2fe;font-weight:700;">Live Operator Location (Moving)</span>');
 
-    // 2. Net Target Markers (0h Loss Site + Confirmed YOLOv8 Lock at XTF Coordinates)
+    // 2. Net Target Markers (Hidden initially; revealed ONLY when confirmed by Sonar YOLOv8)
     var isYoloConfirmed = ${Boolean(isConfirmedLock)};
-
-    // Always render 0h Loss Site Pin (Red Marker)
-    var lossIcon = L.divIcon({ className: '', html: '<div class="custom-net-marker">🔴</div>', iconSize: [24, 24], iconAnchor: [12, 12] });
-    var lossMarker = L.marker(netPos, { icon: lossIcon }).addTo(map)
-      .bindPopup('<b>🔴 0h Fisherman Loss Site</b><br>' +
-                 '<b>Latitude:</b> ' + netPos[0].toFixed(5) + '° N<br>' +
-                 '<b>Longitude:</b> ' + netPos[1].toFixed(5) + '° E<br>' +
-                 '<b>Reported Gear:</b> ' + ${JSON.stringify(safeGear)} + '<br>' +
-                 '<span style="color:#ffd166;font-weight:bold;">Initial Drop Coordinate</span>');
 
     // Confirmed XTF coordinates inside 48h drift zone (passed dynamically as numbers)
     var confirmedLat = ${typeof confirmedLatNum === 'number' && !isNaN(confirmedLatNum) ? confirmedLatNum : 'netPos[0]'};
@@ -2528,6 +2696,14 @@ export default function App() {
     var confirmedPos = [confirmedLat, confirmedLon];
 
     if (isYoloConfirmed) {
+      // 0h Loss Site Pin (Red Marker)
+      var lossIcon = L.divIcon({ className: '', html: '<div class="custom-net-marker">🔴</div>', iconSize: [24, 24], iconAnchor: [12, 12] });
+      var lossMarker = L.marker(netPos, { icon: lossIcon }).addTo(map)
+        .bindPopup('<b>🔴 0h Fisherman Loss Site</b><br>' +
+                   '<b>Latitude:</b> ' + netPos[0].toFixed(5) + '° N<br>' +
+                   '<b>Longitude:</b> ' + netPos[1].toFixed(5) + '° E<br>' +
+                   '<b>Reported Gear:</b> ' + ${JSON.stringify(safeGear)} + '<br>' +
+                   '<span style="color:#ffd166;font-weight:bold;">Initial Drop Coordinate</span>');
       var confirmedIcon = L.divIcon({
         className: '',
         html: '<div class="custom-confirmed-marker">🎯</div>',
@@ -4518,23 +4694,28 @@ export default function App() {
   // 4A. DEDICATED SIDE-SCAN SONAR AI ACOUSTIC CONSOLE (GOOGLE STITCH UI)
   // -------------------------------------------------------------
   if (showSonarConsole) {
-    const activeTarget: SonarNetTarget = detectedNetTarget || {
-      id: 'active-target',
-      fileName: 'Sonar_Pass2_GhostNet.xtf',
+    const activePassMeta = SURVEY_PASSES_DATA[currentSurveyPass] || SURVEY_PASSES_DATA[8];
+    const isTargetLocked = activePassMeta.isNet;
+
+    const activeTarget: SonarNetTarget = {
+      id: `pass-${currentSurveyPass}`,
+      fileName: activePassMeta.name,
       imageUri: '',
-      isNetConfirmed: true,
+      isNetConfirmed: activePassMeta.isNet,
       modelName: 'YOLOv8-Marine ALDFG (455kHz)',
-      confidence: 0.964,
-      detectedGear: selectedTarget?.gearName ? `${selectedTarget.gearName} Snag Cluster` : 'Monofilament Gillnet Snag Cluster',
-      seabedDepthM: selectedTarget?.depthM || 24.5,
-      netElevationM: calculateNetElevation((selectedTarget?.depthM || 24.5) * 0.68, selectedTarget?.depthM || 24.5),
-      acousticShadowLengthM: parseFloat(((selectedTarget?.depthM || 24.5) * 0.68).toFixed(1)),
-      hookTargetDepthM: parseFloat(((selectedTarget?.depthM || 24.5) - calculateNetElevation((selectedTarget?.depthM || 24.5) * 0.68, selectedTarget?.depthM || 24.5)).toFixed(1)),
-      cableScopeM: parseFloat(((selectedTarget?.depthM || 24.5) * 2.8).toFixed(1)),
-      winchLoadKg: Math.round((selectedTarget?.massKg || 380) * 1.25),
-      bottomSubstrate: 'Limestone Reef Snag',
-      gpsCoordinates: selectedTarget?.coords || '13°07\'42.1"N 80°18\'09.4"E',
-      primaryBox: { classId: 0, className: 'ghost_net', confidence: 0.964, x: 55.5, y: 21, width: 29, height: 59 },
+      confidence: activePassMeta.confidence,
+      detectedGear: activePassMeta.isNet
+        ? (selectedTarget?.gearName ? `${selectedTarget.gearName} Snag Cluster` : 'Monofilament Gillnet Snag Cluster')
+        : activePassMeta.substrate,
+      seabedDepthM: activePassMeta.depthM,
+      netElevationM: activePassMeta.isNet ? 4.2 : 0.0,
+      acousticShadowLengthM: activePassMeta.isNet ? 16.7 : 0.0,
+      hookTargetDepthM: activePassMeta.isNet ? 20.3 : activePassMeta.depthM,
+      cableScopeM: parseFloat((activePassMeta.depthM * 2.8).toFixed(1)),
+      winchLoadKg: activePassMeta.isNet ? Math.round((selectedTarget?.massKg || 380) * 1.25) : 0,
+      bottomSubstrate: activePassMeta.substrate,
+      gpsCoordinates: selectedTarget?.coords || activePassMeta.coords,
+      primaryBox: { classId: 0, className: 'ghost_net', confidence: activePassMeta.confidence, x: 55.5, y: 21, width: 29, height: 59 },
       timestamp: Date.now()
     };
 
@@ -4602,6 +4783,106 @@ export default function App() {
             </TouchableOpacity>
           </View>
 
+          {/* PASS SELECTION & AUTONOMOUS SWEEP CONTROLS */}
+          <View style={{
+            backgroundColor: '#0b1623',
+            borderRadius: 10,
+            padding: 10,
+            borderWidth: 1,
+            borderColor: '#1e3a5f',
+            marginBottom: 10
+          }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isTargetLocked ? '#00e475' : (isAutoScanningSweep ? '#38bdf8' : '#ffd166') }} />
+                <Text style={{ color: '#e2e8f0', fontSize: 12, fontWeight: '800', fontFamily: 'monospace' }}>
+                  PASS {currentSurveyPass} / 8 • {activePassMeta.name}
+                </Text>
+              </View>
+              <View style={{
+                backgroundColor: isTargetLocked ? 'rgba(0, 228, 117, 0.15)' : 'rgba(56, 189, 248, 0.15)',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 4,
+                borderWidth: 1,
+                borderColor: isTargetLocked ? '#00e475' : '#38bdf8'
+              }}>
+                <Text style={{ color: isTargetLocked ? '#00e475' : '#38bdf8', fontSize: 10, fontWeight: '900', fontFamily: 'monospace' }}>
+                  {isTargetLocked ? '🎯 GHOST NET TARGET LOCKED' : (isAutoScanningSweep ? '🔄 AUTONOMOUS SWEEPING...' : '⏸️ SWEEP PAUSED')}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1.4,
+                  backgroundColor: isAutoScanningSweep ? '#dc2626' : (isTargetLocked ? '#059669' : '#0284c7'),
+                  paddingVertical: 8,
+                  borderRadius: 6,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 4
+                }}
+                onPress={() => {
+                  if (isAutoScanningSweep) {
+                    setIsAutoScanningSweep(false);
+                  } else {
+                    if (currentSurveyPass >= 8) setCurrentSurveyPass(1);
+                    setIsAutoScanningSweep(true);
+                  }
+                }}
+              >
+                <Text style={{ fontSize: 12 }}>{isAutoScanningSweep ? '⏸️' : '▶️'}</Text>
+                <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '800' }}>
+                  {isAutoScanningSweep ? 'PAUSE SWEEP' : (isTargetLocked ? 'RE-SCAN GRID' : 'START AUTONOMOUS SWEEP')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 0.8,
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  paddingVertical: 8,
+                  borderRadius: 6,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                onPress={() => {
+                  setIsAutoScanningSweep(false);
+                  setCurrentSurveyPass((p) => Math.max(1, p - 1));
+                }}
+              >
+                <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '700' }}>◀ PREV</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 0.8,
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  paddingVertical: 8,
+                  borderRadius: 6,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                onPress={() => {
+                  setIsAutoScanningSweep(false);
+                  setCurrentSurveyPass((p) => {
+                    const next = Math.min(8, p + 1);
+                    if (next === 8) {
+                      setIsNetMarkedOnMap(true);
+                      setRescueCoords((rc) => ({ ...rc, speedKn: 0.0 }));
+                    }
+                    return next;
+                  });
+                }}
+              >
+                <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: '700' }}>NEXT ▶</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* SINGLE PROMINENT HIGH-RESOLUTION ECHOGRAM DISPLAY (NO THUMBNAIL CAROUSEL) */}
           <View style={{
             borderRadius: 12,
@@ -4615,7 +4896,7 @@ export default function App() {
             aspectRatio: 512 / 280
           }}>
             <Image
-              source={activeTarget.imageUri ? { uri: activeTarget.imageUri } : SONAR_IMG}
+              source={PASS_IMAGES[currentSurveyPass] || SONAR_IMG}
               style={{
                 width: '100%',
                 height: '100%',
@@ -4685,31 +4966,48 @@ export default function App() {
             }} />
           </View>
 
-          {/* Telemetry Strip (Bottom of Echogram) */}
+          {/* DYNAMIC YOLOv8 MATCH CONFIDENCE & CLASSIFICATION BOX */}
           <View style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            backgroundColor: '#0f172a',
-            borderRadius: 8,
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderWidth: 1,
-            borderColor: '#1e293b',
-            marginBottom: 14
+            backgroundColor: isTargetLocked ? 'rgba(0, 228, 117, 0.08)' : '#0f172a',
+            borderRadius: 10,
+            padding: 12,
+            borderWidth: 1.5,
+            borderColor: isTargetLocked ? '#00e475' : '#1e3a5f',
+            marginBottom: 14,
+            shadowColor: isTargetLocked ? '#00e475' : 'transparent',
+            shadowOpacity: 0.3,
+            shadowRadius: 10,
+            elevation: 4
           }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 13 }}>🧭</Text>
-              <Text style={{ color: '#e2e8f0', fontSize: 11, fontWeight: '700', fontFamily: 'monospace' }}>
-                {activeTarget.gpsCoordinates}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 14 }}>{isTargetLocked ? '🎯' : '📡'}</Text>
+                <Text style={{ color: isTargetLocked ? '#00e475' : '#38bdf8', fontSize: 12, fontWeight: '900', letterSpacing: 0.5, fontFamily: 'monospace' }}>
+                  {isTargetLocked ? 'YOLOv8 CONFIRMED GHOST NET LOCK' : 'REAL-TIME YOLOv8 ACOUSTIC CLASSIFIER'}
+                </Text>
+              </View>
+              <Text style={{ color: isTargetLocked ? '#00e475' : '#ffd166', fontSize: 15, fontWeight: '900', fontFamily: 'monospace' }}>
+                {(activePassMeta.confidence * 100).toFixed(1)}% MATCH
               </Text>
             </View>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Text style={{ color: '#94a3b8', fontSize: 11, fontFamily: 'monospace' }}>
-                SPD: <Text style={{ color: '#38bdf8', fontWeight: 'bold' }}>{rescueCoords.speedKn > 0 ? rescueCoords.speedKn.toFixed(1) : '1.8'} KTS</Text>
+
+            {/* Confidence Progress Bar */}
+            <View style={{ width: '100%', height: 6, backgroundColor: '#1e293b', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
+              <View style={{
+                width: `${(activePassMeta.confidence * 100).toFixed(1)}%`,
+                height: '100%',
+                backgroundColor: isTargetLocked ? '#00e475' : (activePassMeta.confidence > 0.15 ? '#ffd166' : '#38bdf8'),
+                borderRadius: 3
+              }} />
+            </View>
+
+            {/* Classification Verdict */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ color: isTargetLocked ? '#6ee7b7' : '#94a3b8', fontSize: 11, fontWeight: '700' }}>
+                {activePassMeta.verdict}
               </Text>
-              <Text style={{ color: '#94a3b8', fontSize: 11, fontFamily: 'monospace' }}>
-                STATUS: <Text style={{ color: activeTarget.isNetConfirmed ? '#00e475' : '#ffd166', fontWeight: 'bold' }}>{activeTarget.isNetConfirmed ? 'NET LOCKED' : 'SEARCHING'}</Text>
+              <Text style={{ color: '#64748b', fontSize: 10, fontFamily: 'monospace' }}>
+                VESSEL SPD: <Text style={{ color: '#e2e8f0', fontWeight: 'bold' }}>{activePassMeta.speedKn.toFixed(1)} KTS</Text>
               </Text>
             </View>
           </View>
