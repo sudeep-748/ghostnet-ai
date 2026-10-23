@@ -501,25 +501,6 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
               {isRefreshing ? 'SYNCING DATABASE...' : 'LIVE DATABASE CONNECTED'}
             </Text>
           </TouchableOpacity>
-
-          {reports.length === 0 && (
-            <TouchableOpacity
-              style={{
-                marginLeft: 10,
-                backgroundColor: 'rgba(56, 189, 248, 0.15)',
-                borderWidth: 1,
-                borderColor: '#38bdf8',
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                borderRadius: 20
-              }}
-              onPress={handleManualSeed}
-            >
-              <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: '800' }}>
-                🧪 Load Pilot Data (7 Nets)
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Right: Time, Officer Profile, and Clean Exit Button */}
