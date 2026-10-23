@@ -4759,28 +4759,37 @@ export default function App() {
             Sector Survey: {activeTarget.detectedGear} • {activeTarget.gpsCoordinates}
           </Text>
 
-          {/* Re-Upload Survey Batch Button */}
-          <View style={{ marginBottom: 12 }}>
-            <TouchableOpacity
-              style={{
-                width: '100%',
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                backgroundColor: 'rgba(0, 242, 254, 0.12)',
-                borderWidth: 1.5,
-                borderColor: '#00f2fe',
-                borderRadius: 8,
-                paddingVertical: 12
-              }}
-              onPress={triggerBatchUpload}
-            >
-              <Text style={{ fontSize: 18 }}>📁</Text>
-              <Text style={{ color: '#00f2fe', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 }}>
-                UPLOAD NEW SURVEY BATCH (.XTF SONAR / PHOTOS)
+          {/* Tactical Sonar Stream Header Banner */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: 'rgba(0, 242, 254, 0.08)',
+            borderWidth: 1,
+            borderColor: 'rgba(0, 242, 254, 0.25)',
+            borderRadius: 8,
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            marginBottom: 12
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 16 }}>📡</Text>
+              <Text style={{ color: '#00f2fe', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 }}>
+                455 KHZ HYDROACOUSTIC SURVEY STREAM (.XTF)
               </Text>
-            </TouchableOpacity>
+            </View>
+            <View style={{
+              backgroundColor: isAutoScanningSweep ? 'rgba(56, 189, 248, 0.2)' : (isTargetLocked ? 'rgba(0, 228, 117, 0.2)' : 'rgba(255, 209, 102, 0.2)'),
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 4,
+              borderWidth: 1,
+              borderColor: isAutoScanningSweep ? '#38bdf8' : (isTargetLocked ? '#00e475' : '#ffd166')
+            }}>
+              <Text style={{ color: isAutoScanningSweep ? '#38bdf8' : (isTargetLocked ? '#00e475' : '#ffd166'), fontSize: 9, fontWeight: '900', fontFamily: 'monospace' }}>
+                {isAutoScanningSweep ? '● STREAMING PINGS' : (isTargetLocked ? '● TARGET LOCKED' : '● READY')}
+              </Text>
+            </View>
           </View>
 
           {/* PASS SELECTION & AUTONOMOUS SWEEP CONTROLS */}
@@ -5959,11 +5968,11 @@ export default function App() {
                     elevation: 5
                   }}
                   onPress={() => {
-                    if (isNetMarkedOnMap && detectedNetTarget) {
-                      setShowSonarConsole(true);
-                    } else {
-                      setShowSonarUploadModal(true);
+                    if (!isNetMarkedOnMap) {
+                      setCurrentSurveyPass(1);
+                      setIsAutoScanningSweep(true);
                     }
+                    setShowSonarConsole(true);
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
@@ -6018,7 +6027,9 @@ export default function App() {
                         }}
                         onPress={(e: any) => {
                           e.stopPropagation();
-                          setShowSonarUploadModal(true);
+                          setCurrentSurveyPass(1);
+                          setIsAutoScanningSweep(true);
+                          setShowSonarConsole(true);
                         }}
                       >
                         <Text style={{ color: '#94a3b8', fontSize: 10, fontWeight: '700' }}>Re-scan ↻</Text>
