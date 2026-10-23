@@ -392,29 +392,46 @@ const I18N = {
   }
 };
 
-// Intelligent Maritime Relative Time Formatter (Real time computation)
+// Intelligent Maritime Relative Time Formatter (IST & UTC Synchronized)
 const formatRelativeTime = (dateInput: any, lang: Language = 'EN'): string => {
-  if (!dateInput) return lang === 'TA' ? 'அண்மையில்' : 'Recently';
+  if (!dateInput) return lang === 'TA' ? 'சற்றுமுன்' : 'Just Now';
 
   let dateObj: Date;
   if (typeof dateInput === 'number') {
     dateObj = new Date(dateInput);
   } else if (typeof dateInput === 'string') {
-    const parsed = Date.parse(dateInput);
+    let str = dateInput.trim();
+    // Ensure UTC strings from SQLite / FastAPI without Z are parsed as UTC
+    if (str.includes('T') && !str.endsWith('Z') && !str.includes('+') && !str.slice(10).includes('-')) {
+      str = str + 'Z';
+    } else if (str.includes(' ') && !str.includes('Z') && !str.includes('+')) {
+      str = str.replace(' ', 'T') + 'Z';
+    }
+    const parsed = Date.parse(str);
     if (!isNaN(parsed)) {
       dateObj = new Date(parsed);
     } else {
-      // Return cleaned string fallback
-      return dateInput;
+      const fallbackParse = Date.parse(dateInput);
+      if (!isNaN(fallbackParse)) {
+        dateObj = new Date(fallbackParse);
+      } else {
+        return dateInput;
+      }
     }
   } else if (dateInput instanceof Date) {
     dateObj = dateInput;
   } else {
-    return lang === 'TA' ? 'அண்மையில்' : 'Recently';
+    return lang === 'TA' ? 'சற்றுமுன்' : 'Just Now';
   }
 
   const now = new Date();
   const diffMs = now.getTime() - dateObj.getTime();
+
+  // Handle future clock skew (< 2 min ahead)
+  if (diffMs < 0 && diffMs > -120000) {
+    return lang === 'TA' ? 'சற்றுமுன்' : 'Just Now';
+  }
+
   const diffSec = Math.floor(diffMs / 1000);
   const diffMin = Math.floor(diffSec / 60);
   const diffHr = Math.floor(diffMin / 60);
@@ -423,7 +440,7 @@ const formatRelativeTime = (dateInput: any, lang: Language = 'EN'): string => {
 
   // 1. Just Now (< 2 mins)
   if (diffMin < 2) {
-    return lang === 'TA' ? 'சற்றுமுன் அறிவிக்கப்பட்டது' : 'Reported Just Now';
+    return lang === 'TA' ? 'சற்றுமுன்' : 'Just Now';
   }
 
   // 2. Minutes ago (< 60 mins)
@@ -431,7 +448,7 @@ const formatRelativeTime = (dateInput: any, lang: Language = 'EN'): string => {
     return lang === 'TA' ? `${diffMin} நிமிடங்களுக்கு முன்பு` : `${diffMin} min ago`;
   }
 
-  // Check calendar day
+  // Check calendar day in local time
   const isToday = now.toDateString() === dateObj.toDateString();
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
@@ -444,25 +461,28 @@ const formatRelativeTime = (dateInput: any, lang: Language = 'EN'): string => {
 
   // 4. Yesterday
   if (isYesterday) {
-    return lang === 'TA' ? `நேற்று, ${timeStr}` : `Reported Yesterday, ${timeStr}`;
+    return lang === 'TA' ? `நேற்று, ${timeStr}` : `Yesterday, ${timeStr}`;
   }
 
   // 5. Days ago (2 to 6 days)
   const diffDays = Math.floor(diffHr / 24);
   if (diffDays >= 2 && diffDays <= 6) {
-    return lang === 'TA' ? `${diffDays} நாட்களுக்கு முன்பு` : `Reported ${diffDays} days ago`;
+    return lang === 'TA' ? `${diffDays} நாட்களுக்கு முன்பு` : `${diffDays} days ago`;
   }
 
   // 6. Older
   const dateStr = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  return lang === 'TA' ? `${dateStr} அன்று, ${timeStr}` : `Reported ${dateStr}, ${timeStr}`;
+  return lang === 'TA' ? `${dateStr}, ${timeStr}` : `${dateStr}, ${timeStr}`;
 };
 
 // Robust extractor for reports & targets: extracts real epoch from rep- or tgt- ID or fallback
 const getReportTimeDisplay = (item: { timestamp?: number; id?: string; reportedTime?: string; reportedAgo?: string }, lang: Language = 'EN'): string => {
-  if (item.timestamp && typeof item.timestamp === 'number') {
+  // 1. Prefer explicit numerical epoch timestamp
+  if (item.timestamp && typeof item.timestamp === 'number' && !isNaN(item.timestamp)) {
     return formatRelativeTime(item.timestamp, lang);
   }
+
+  // 2. Extract epoch timestamp from rep- or tgt- ID (e.g. rep-1740000000000)
   if (item.id && typeof item.id === 'string') {
     const rawNum = item.id.replace(/^(rep|tgt)-/, '');
     const epoch = parseInt(rawNum, 10);
@@ -470,11 +490,25 @@ const getReportTimeDisplay = (item: { timestamp?: number; id?: string; reportedT
       return formatRelativeTime(epoch, lang);
     }
   }
+
+  // 3. Check fallback strings safely
   const fallbackStr = item.reportedTime || item.reportedAgo;
-  if (fallbackStr && fallbackStr !== 'Reported Just Now' && fallbackStr !== 'Recent Report') {
-    return formatRelativeTime(fallbackStr, lang);
+  if (fallbackStr) {
+    const lower = fallbackStr.toLowerCase().trim();
+    if (lower.includes('just now') || lower.includes('சற்றுமுன்') || lower === 'recent') {
+      return lang === 'TA' ? 'சற்றுமுன்' : 'Just Now';
+    }
+    if (lower === 'cloud db' || lower.includes('cloud')) {
+      return lang === 'TA' ? 'கிளவுட் பதிவேடு' : 'Cloud DB';
+    }
+    const parsed = Date.parse(fallbackStr);
+    if (!isNaN(parsed)) {
+      return formatRelativeTime(parsed, lang);
+    }
+    return fallbackStr;
   }
-  return lang === 'TA' ? 'நேற்று அறிவிக்கப்பட்டது' : 'Reported Yesterday';
+
+  return lang === 'TA' ? 'சற்றுமுன்' : 'Just Now';
 };
 
 export default function App() {
@@ -1290,9 +1324,17 @@ export default function App() {
               const liveDistNm = calculateDistanceNm(rescueCoords.lat, rescueCoords.lon, rLat, rLon);
               const liveBearing = calculateBearing(rescueCoords.lat, rescueCoords.lon, rLat, rLon);
 
-              // Calculate human-friendly time elapsed using real timestamp
+              // Calculate human-friendly time elapsed using real timestamp (IST / UTC safe)
               const reportDate = r.loss_time || r.created_at;
-              const timeAgo = formatRelativeTime(reportDate, language);
+              let targetTimestamp = Date.now();
+              if (reportDate) {
+                let s = String(reportDate).trim();
+                if (s.includes('T') && !s.endsWith('Z') && !s.includes('+') && !s.slice(10).includes('-')) s = s + 'Z';
+                else if (s.includes(' ') && !s.includes('Z') && !s.includes('+')) s = s.replace(' ', 'T') + 'Z';
+                const p = Date.parse(s);
+                if (!isNaN(p)) targetTimestamp = p;
+              }
+              const timeAgo = formatRelativeTime(targetTimestamp, language);
 
               return {
                 id: r.client_report_id || r.id || `tgt-${idx}`,
