@@ -4946,32 +4946,102 @@ export default function App() {
                         })}
                       </View>
 
-                      {/* Real Live Telemetry Bar */}
-                      <View style={[styles.floatingHudBar, { marginTop: 12 }]}>
-                        <View style={styles.hudStatCol}>
-                          <Text style={styles.hudStatLabel}>{t('distanceLabel')}</Text>
-                          <Text style={[styles.hudStatVal, { color: '#00e475' }]}>
-                            {distNm} NM
+                      {/* Tactical Live Telemetry Grid (Clean 4-Tile HUD) */}
+                      <View style={{
+                        flexDirection: 'row',
+                        gap: 8,
+                        marginTop: 12,
+                        width: '100%'
+                      }}>
+                        {/* 1. Distance */}
+                        <View style={{
+                          flex: 1,
+                          backgroundColor: '#08131f',
+                          borderRadius: 10,
+                          padding: 10,
+                          borderWidth: 1,
+                          borderColor: 'rgba(0, 228, 117, 0.35)',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>
+                            📍 DISTANCE
+                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2, marginTop: 4 }}>
+                            <Text style={{ color: '#00e475', fontSize: 18, fontWeight: '900', fontFamily: 'monospace' }}>
+                              {distNm}
+                            </Text>
+                            <Text style={{ color: '#00e475', fontSize: 10, fontWeight: '700' }}>NM</Text>
+                          </View>
+                          <Text style={{ color: '#475569', fontSize: 9, marginTop: 2 }}>To Target</Text>
+                        </View>
+
+                        {/* 2. Bearing */}
+                        <View style={{
+                          flex: 1,
+                          backgroundColor: '#08131f',
+                          borderRadius: 10,
+                          padding: 10,
+                          borderWidth: 1,
+                          borderColor: 'rgba(56, 189, 248, 0.35)',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>
+                            🧭 BEARING
+                          </Text>
+                          <Text style={{ color: '#38bdf8', fontSize: 18, fontWeight: '900', marginTop: 4, fontFamily: 'monospace' }}>
+                            {realHeading}
+                          </Text>
+                          <Text style={{ color: '#475569', fontSize: 9, marginTop: 2 }}>Direct Vector</Text>
+                        </View>
+
+                        {/* 3. Speed */}
+                        <View style={{
+                          flex: 1,
+                          backgroundColor: '#08131f',
+                          borderRadius: 10,
+                          padding: 10,
+                          borderWidth: 1,
+                          borderColor: liveSpeed > 0 ? 'rgba(0, 228, 117, 0.35)' : 'rgba(100, 116, 139, 0.3)',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>
+                            ⚡ SPEED
+                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2, marginTop: 4 }}>
+                            <Text style={{ color: liveSpeed > 0 ? '#00e475' : '#cbd5e1', fontSize: 18, fontWeight: '900', fontFamily: 'monospace' }}>
+                              {liveSpeed.toFixed(1)}
+                            </Text>
+                            <Text style={{ color: liveSpeed > 0 ? '#00e475' : '#94a3b8', fontSize: 10, fontWeight: '700' }}>kn</Text>
+                          </View>
+                          <Text style={{ color: '#475569', fontSize: 9, marginTop: 2 }}>
+                            {liveSpeed > 8 ? 'Cruise' : liveSpeed > 0.5 ? 'Slow' : 'Stationary'}
                           </Text>
                         </View>
-                        <View style={styles.hudDivider} />
-                        <View style={styles.hudStatCol}>
-                          <Text style={styles.hudStatLabel}>{t('headingLabel')}</Text>
-                          <Text style={[styles.hudStatVal, { color: '#89ceff' }]}>{realHeading}</Text>
-                        </View>
-                        <View style={styles.hudDivider} />
-                        <View style={styles.hudStatCol}>
-                          <Text style={styles.hudStatLabel}>{t('speedLabel')}</Text>
-                          <Text style={[styles.hudStatVal, { color: liveSpeed > 0 ? '#00e475' : '#94a3b8' }]}>
-                            {liveSpeed > 0 ? `${liveSpeed.toFixed(1)} kn` : '0.0 kn (Stationary)'}
+
+                        {/* 4. Arrival ETA */}
+                        <View style={{
+                          flex: 1,
+                          backgroundColor: '#08131f',
+                          borderRadius: 10,
+                          padding: 10,
+                          borderWidth: 1,
+                          borderColor: 'rgba(255, 209, 102, 0.35)',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Text style={{ color: '#64748b', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>
+                            ⏱️ ARRIVAL
                           </Text>
-                        </View>
-                        <View style={styles.hudDivider} />
-                        <View style={styles.hudStatCol}>
-                          <Text style={styles.hudStatLabel}>{t('etaLabel')}</Text>
-                          <Text style={[styles.hudStatVal, { color: '#ffd166' }]}>
-                            {liveSpeed > 0.5 ? `${etaMin} MIN` : `~${etaMin} MIN (Cruise)`}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2, marginTop: 4 }}>
+                            <Text style={{ color: '#ffd166', fontSize: 18, fontWeight: '900', fontFamily: 'monospace' }}>
+                              {etaMin}
+                            </Text>
+                            <Text style={{ color: '#ffd166', fontSize: 10, fontWeight: '700' }}>MIN</Text>
+                          </View>
+                          <Text style={{ color: '#475569', fontSize: 9, marginTop: 2 }}>Est. Time</Text>
                         </View>
                       </View>
 
