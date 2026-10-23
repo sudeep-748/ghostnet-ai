@@ -56,13 +56,7 @@ def on_startup():
         from app.core.database import Base, engine
         Base.metadata.create_all(bind=engine)
         print(">>> GhostNet AI backend started successfully! Persistent database active.")
-        # Auto-seed authentic pilot data if fresh empty database
-        db = SessionLocal()
-        try:
-            from app.api.v1.admin import seed_pilot_data
-            seed_pilot_data(force=False, db=db)
-        finally:
-            db.close()
+
     except Exception as e:
         print(f">>> Database startup notice: {e}")
 

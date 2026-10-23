@@ -162,48 +162,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
         }
       }
 
-      // If database is empty, seed authentic pilot data and re-fetch
-      if (loadedReports.length === 0) {
-        try {
-          const seedRes = await fetch(`${API_BASE}/api/v1/admin/seed-pilot-data`, {
-            method: 'POST'
-          });
-          if (seedRes.ok) {
-            const reDashRes = await fetch(`${API_BASE}/api/v1/admin/dashboard`);
-            if (reDashRes.ok) {
-              const reData = await reDashRes.json();
-              if (Array.isArray(reData.reports)) {
-                loadedReports = reData.reports.map((r: any) => ({
-                  id: r.id,
-                  name: r.name || 'Fisherman',
-                  boatTag: r.boatTag || 'IND-TN-07-SP-0007',
-                  lat: r.lat || 13.1245,
-                  lon: r.lon || 80.3120,
-                  depth: r.depth || 34,
-                  weight: r.weight || 1800,
-                  gear: r.gear || 'Monofilament Gillnet',
-                  threat: r.threat || 'CRITICAL',
-                  dbt_status: r.dbt_status || 'pending',
-                  dbt_amount: r.dbt_amount || 36000,
-                  notes: r.notes || '',
-                  lossDate: '23 Oct 2026',
-                  area: r.notes?.includes('Area:')
-                    ? r.notes.split('Area:')[1]?.split('•')[0]?.trim()
-                    : 'Kasimedu Sector 4',
-                  sonarMatch: r.notes?.includes('YOLO_Match:')
-                    ? parseFloat(r.notes.split('YOLO_Match:')[1]?.replace('%', '')?.trim() || '94.2')
-                    : 94.2,
-                  aadhaar: 'XXXX-XXXX-4291',
-                  bank: 'State Bank of India • Kasimedu Coastal A/C'
-                }));
-              }
-              if (Array.isArray(reData.missions)) {
-                loadedMissions = reData.missions;
-              }
-            }
-          }
-        } catch (e) {}
-      }
+// Auto-seed removed: Database remains strictly empty when cleared
 
       setReports(loadedReports);
       setMissions(loadedMissions);
@@ -229,6 +188,21 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     fetchDatabaseData(true);
   }, []);
 
+  const handleManualSeed = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/seed-pilot-data?force=true`, { method: 'POST' });
+      if (res.ok) {
+        if (onShowToast) onShowToast('🧪 Kasimedu Pilot Data (7 Nets) loaded into database!');
+        await fetchDatabaseData(false);
+      }
+    } catch (e) {
+      if (onShowToast) onShowToast('Failed to seed pilot data.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   // Compute live aggregates from database records
   const totalReportsCount = reports.length;
   const pendingReports = useMemo(() => reports.filter((r) => r.dbt_status === 'pending'), [reports]);
@@ -241,9 +215,9 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     [disbursedReports]
   );
 
-  const totalRecoveredKg = impact?.total_recovered_kg || 18400.0;
-  const co2eAvoidedKg = impact?.co2e_avoided_kg || Math.round(totalRecoveredKg * 6.5);
-  const animalsSaved = impact?.estimated_animals_protected || 450;
+  const totalRecoveredKg = impact ? impact.total_recovered_kg : (reports.length > 0 ? 18400.0 : 0.0);
+  const co2eAvoidedKg = impact ? impact.co2e_avoided_kg : Math.round(totalRecoveredKg * 6.5);
+  const animalsSaved = impact ? impact.estimated_animals_protected : (reports.length > 0 ? 450 : 0);
 
   // Selected Target for Total Map Flyout
   const selectedReport = useMemo(() => {
@@ -460,7 +434,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
           </View>
         </View>
 
-        {/* Center: Live Sensor Pill */}
+        {/* Center: Live Sensor Pill & Voluntary Pilot Seeder */}
         <View style={styles.headerCenter}>
           <TouchableOpacity
             style={styles.sonarLivePill}
@@ -475,6 +449,25 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
               {isRefreshing ? 'SYNCING DATABASE...' : 'LIVE DATABASE CONNECTED'}
             </Text>
           </TouchableOpacity>
+
+          {reports.length === 0 && (
+            <TouchableOpacity
+              style={{
+                marginLeft: 10,
+                backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                borderWidth: 1,
+                borderColor: '#38bdf8',
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 20
+              }}
+              onPress={handleManualSeed}
+            >
+              <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: '800' }}>
+                🧪 Load Pilot Data (7 Nets)
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Right: Time, Officer Profile, and Clean Exit Button */}
@@ -706,6 +699,34 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
 
                     {/* Right: Target Details Flyout Card (Dark Navy on Map) */}
                     <View style={styles.targetDetailsCard}>
+                      {reports.length === 0 ? (
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                          <Text style={{ fontSize: 32, marginBottom: 12 }}>🌊</Text>
+                          <Text style={{ color: '#00f2fe', fontSize: 13, fontWeight: '900', textAlign: 'center', letterSpacing: 0.5 }}>
+                            DATABASE EMPTY (0 TARGETS)
+                          </Text>
+                          <Text style={{ color: '#94a3b8', fontSize: 11, textAlign: 'center', marginTop: 8, lineHeight: 16 }}>
+                            No lost nets currently in the database. When a fisherman reports a lost net or trial target, it will appear here live.
+                          </Text>
+                          <TouchableOpacity
+                            style={{
+                              marginTop: 18,
+                              backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                              borderWidth: 1,
+                              borderColor: '#38bdf8',
+                              paddingHorizontal: 12,
+                              paddingVertical: 7,
+                              borderRadius: 6
+                            }}
+                            onPress={handleManualSeed}
+                          >
+                            <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: '800' }}>
+                              🧪 Load Pilot Data (7 Nets)
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <>
                       <View style={styles.targetCardHeader}>
                         <View>
                           <Text style={styles.targetCardSubtitle}>DATABASE TARGET TELEMETRY</Text>
@@ -812,6 +833,8 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                           <Text style={styles.actionBtnSolidText}>🚨 Dispatch Fleet</Text>
                         </TouchableOpacity>
                       </View>
+                        </>
+                      )}
                     </View>
                   </View>
 
@@ -965,6 +988,18 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                         Action Protocol
                       </Text>
                     </View>
+
+                    {filteredReports.length === 0 && (
+                      <View style={{ padding: 28, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 24, marginBottom: 8 }}>🌊</Text>
+                        <Text style={{ color: '#94a3b8', fontSize: 13, fontWeight: '700' }}>
+                          No lost gear declarations found in database. Clean state (0 records).
+                        </Text>
+                        <Text style={{ color: '#64748b', fontSize: 11, marginTop: 4 }}>
+                          When fishermen submit lost nets via mobile app, they will appear here in real-time.
+                        </Text>
+                      </View>
+                    )}
 
                     {filteredReports.map((item, index) => (
                       <View
