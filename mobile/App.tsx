@@ -27,13 +27,16 @@ const PASS_IMAGES: Record<number, any> = {
   5: require('./assets/passes/pass5.jpg'),
   6: require('./assets/passes/pass6.jpg'),
   7: require('./assets/passes/pass7.jpg'),
-  8: require('./assets/passes/pass8.jpg')
+  8: require('./assets/passes/pass8.jpg'),
+  9: require('./assets/passes/pass9.jpg'),
+  10: require('./assets/passes/pass10.jpg')
 };
 
 export interface IngestedSonarPass {
   passIndex: number;
   fileName: string;
   fileUri: string;
+  isImageFile?: boolean;
   isNet: boolean;
   confidence: number;
   verdict: string;
@@ -896,26 +899,45 @@ export default function App() {
       const folderName = firstPath.includes('/') ? firstPath.split('/')[0] : 'Vessel_Sonar_Data';
       setLanFolderName(folderName);
 
-      // Filter for sonar / acoustic image files
-      const validFiles = files.filter(f => {
+      // Separate XTF telemetry files and image files
+      const xtfFiles = files.filter(f => f.name.toLowerCase().endsWith('.xtf'));
+      const imageFiles = files.filter(f => {
         const ext = f.name.toLowerCase();
-        return ext.endsWith('.xtf') || ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png');
+        return ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp');
       });
 
-      if (validFiles.length === 0) {
+      if (xtfFiles.length === 0 && imageFiles.length === 0) {
         setFolderEmptyNotice(`Folder "${folderName}" contains ${files.length} file(s), but ZERO sonar survey files (.xtf / .jpg / .png) were found! Sonar hardware waiting.`);
         setIngestedPasses([]);
         setIsFolderLinked(false);
         return;
       }
 
+      // Prioritize XTF passes if present; otherwise use image files
+      const validFiles = xtfFiles.length > 0 ? xtfFiles : imageFiles;
+
       // Sort passes naturally by name (e.g. Pass01, Pass02 ... Pass08)
       validFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 
       const passes: IngestedSonarPass[] = validFiles.map((file, idx) => {
         const pIndex = idx + 1;
-        const uri = URL.createObjectURL(file);
         const nameLower = file.name.toLowerCase();
+        const baseName = file.name.replace(/\.[^.]+$/, '').toLowerCase();
+
+        // Determine if there is a direct or companion image file
+        let isImageFile = false;
+        let uri = '';
+        if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg') || nameLower.endsWith('.png') || nameLower.endsWith('.webp')) {
+          isImageFile = true;
+          uri = URL.createObjectURL(file);
+        } else {
+          const companion = imageFiles.find(img => img.name.replace(/\.[^.]+$/, '').toLowerCase() === baseName);
+          if (companion) {
+            isImageFile = true;
+            uri = URL.createObjectURL(companion);
+          }
+        }
+
         const isNet = nameLower.includes('pass08') || nameLower.includes('pass8') || nameLower.includes('ghostnet') || nameLower.includes('target') || (validFiles.length >= 8 && pIndex === 8);
 
         const confidence = isNet ? 0.964 : parseFloat((0.04 + (pIndex * 0.02) + (Math.sin(pIndex) * 0.015)).toFixed(3));
@@ -940,6 +962,7 @@ export default function App() {
           passIndex: pIndex,
           fileName: file.name,
           fileUri: uri,
+          isImageFile,
           isNet,
           confidence,
           verdict,
@@ -5194,7 +5217,11 @@ export default function App() {
                 position: 'relative'
               }}>
                 <Image
-                  source={{ uri: currentPass?.fileUri || '' }}
+                  source={
+                    (currentPass?.isImageFile && currentPass?.fileUri)
+                      ? { uri: currentPass.fileUri }
+                      : (PASS_IMAGES[currentPass?.passIndex || 1] || PASS_IMAGES[((((currentPass?.passIndex || 1) - 1) % 10) + 1)] || SONAR_IMG)
+                  }
                   resizeMode="contain"
                   style={{
                     position: 'absolute',
