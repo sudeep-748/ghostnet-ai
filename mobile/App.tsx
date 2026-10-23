@@ -4473,7 +4473,22 @@ export default function App() {
             </View>
             <TouchableOpacity
               style={styles.criticalViewBtn}
-              onPress={() => setCrewTab('REPORTS')}
+              onPress={() => {
+                const critTgt = targets[0];
+                if (!critTgt) return;
+                setSelectedTarget(critTgt);
+                try {
+                  if (typeof window !== 'undefined' && window.localStorage) {
+                    window.localStorage.setItem('ghostnet_selected_target', JSON.stringify(critTgt));
+                  }
+                } catch (e) {}
+
+                if (critTgt.isAssigned) {
+                  setCrewTab('MISSION');
+                } else {
+                  setShowPreDepartureModal(true);
+                }
+              }}
             >
               <Text style={styles.criticalViewTxt}>{t('viewAlertBtn')}</Text>
             </TouchableOpacity>
