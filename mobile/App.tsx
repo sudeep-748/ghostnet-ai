@@ -3502,6 +3502,8 @@ export default function App() {
 
       // 1. Post to backend or queue offline to record in recovery_updates and complete mission!
       const { lat, lon } = parseCoordinates(selectedTarget.coords);
+      const parsedWeightTons = Number(verifiedWeight) || 1.7;
+      const weightInKg = Math.round(parsedWeightTons >= 50 ? parsedWeightTons : parsedWeightTons * 1000);
       const updatePayload = {
         mission_id: currentMissionId,
         report_id: selectedTarget.id,
@@ -3510,8 +3512,8 @@ export default function App() {
         status: 'net_recovered',
         latitude: rescueCoords.lat || lat,
         longitude: rescueCoords.lon || lon,
-        weight_kg: Number(verifiedWeight) || 1.2,
-        notes: `Hauled & verified by ${currentUser.name} on ${currentUser.boatTag}. Weight: ${verifiedWeight} Tons.`
+        weight_kg: weightInKg,
+        notes: `Hauled & verified by ${currentUser.name} on ${currentUser.boatTag}. Weight: ${parsedWeightTons} Tons (${weightInKg} kg).`
       };
 
       let updateSent = false;

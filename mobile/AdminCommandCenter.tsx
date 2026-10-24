@@ -92,6 +92,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
   const [missions, setMissions] = useState<DbMission[]>([]);
   const [impact, setImpact] = useState<DbImpact | null>(null);
   const [recycling, setRecycling] = useState<DbRecycling[]>([]);
+  const [totalVessels, setTotalVessels] = useState<number>(1);
   const [selectedTargetId, setSelectedTargetId] = useState<string>('TN-NET-0891');
 
   // Fisherman Data Filter & Search
@@ -181,6 +182,13 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
         }
         if (Array.isArray(dashData.recycling)) {
           loadedRecycling = dashData.recycling;
+        }
+        if (dashData.metrics && typeof dashData.metrics.total_vessels === 'number') {
+          setTotalVessels(Math.max(1, dashData.metrics.total_vessels));
+        } else if (Array.isArray(dashData.boats) && dashData.boats.length > 0) {
+          setTotalVessels(dashData.boats.length);
+        } else if (loadedMissions.length > 0) {
+          setTotalVessels(loadedMissions.length);
         }
       }
 
@@ -272,9 +280,29 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     [disbursedReports]
   );
 
-  const totalRecoveredKg = impact?.total_recovered_kg || 0.0;
-  const co2eAvoidedKg = impact?.co2e_avoided_kg || 0.0;
-  const animalsSaved = impact?.estimated_animals_protected || 0;
+  const completedMissionsWeight = useMemo(() => {
+    let kg = 0;
+    missions.forEach((m) => {
+      if (m.status === 'completed') {
+        kg += 1700;
+      }
+    });
+    reports.forEach((r) => {
+      if (r.notes?.includes('Tons') || r.notes?.includes('Recovered') || r.notes?.includes('Hauled')) {
+        const match = r.notes.match(/([0-9.]+)\s*Tons/i);
+        if (match && match[1]) {
+          kg = Math.max(kg, parseFloat(match[1]) * 1000);
+        } else if (r.weight) {
+          kg = Math.max(kg, r.weight >= 100 ? r.weight : r.weight * 1000);
+        }
+      }
+    });
+    return kg;
+  }, [missions, reports]);
+
+  const totalRecoveredKg = Math.max(impact?.total_recovered_kg || 0.0, completedMissionsWeight);
+  const co2eAvoidedKg = Math.max(impact?.co2e_avoided_kg || 0.0, Math.round(totalRecoveredKg * 6.5));
+  const animalsSaved = Math.max(impact?.estimated_animals_protected || 0, Math.round(totalRecoveredKg * 0.12));
 
   // Selected Target for Total Map Flyout
   const selectedReport = useMemo(() => {
@@ -353,17 +381,36 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
   // Generates Leaflet Master Map HTML (High Resolution, No Missing Tiles, Zero Hardcoded Markers)
   const generateDynamicMapHtml = () => {
     const targetMarkersJson = JSON.stringify(
-      reports.map((r) => ({
-        id: r.id,
-        lat: r.lat,
-        lon: r.lon,
-        gear: r.gear,
-        weight: r.weight,
-        depth: r.depth,
-        dbt_status: r.dbt_status,
-        name: r.name,
-        boat: r.boatTag
-      }))
+      reports.map((r) => {
+        const mission = missions.find(
+          (m) => m.report_id === r.id || m.report_id === r.id.replace('rep-', 'tgt-') || m.report_id === r.id.replace('tgt-', 'rep-')
+        );
+        let opStatus = 'PENDING (AWAITING VESSEL)';
+        let dot = '🟡';
+        let markerClass = 'marker-pending';
+        if (mission?.status === 'completed' || r.notes?.includes('Recovered') || r.notes?.includes('Hauled')) {
+          opStatus = 'RESCUED (NET ON DECK)';
+          dot = '🟢';
+          markerClass = 'marker-confirmed';
+        } else if (mission?.status === 'active' || mission?.status === 'in_progress') {
+          opStatus = `TAKEN (IN PROGRESS • ${mission.boat_name || 'Rescue Vessel'})`;
+          dot = '🔵';
+          markerClass = 'marker-taken';
+        }
+        return {
+          id: r.id,
+          lat: r.lat,
+          lon: r.lon,
+          gear: r.gear,
+          weight: r.weight,
+          depth: r.depth,
+          status: opStatus,
+          dot,
+          markerClass,
+          name: r.name,
+          boat: r.boatTag
+        };
+      })
     );
 
     const missionsJson = JSON.stringify(
@@ -391,6 +438,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     .custom-net-marker:hover { transform: scale(1.3); }
     .marker-lost { background: #ef4444; box-shadow: 0 0 16px rgba(239, 68, 68, 0.85); }
     .marker-pending { background: #f59e0b; box-shadow: 0 0 16px rgba(245, 158, 11, 0.85); }
+    .marker-taken { background: #00f2fe; box-shadow: 0 0 16px rgba(0, 242, 254, 0.85); }
     .marker-confirmed { background: #00e475; box-shadow: 0 0 16px rgba(0, 228, 117, 0.85); }
     .vessel-marker { background: #00f2fe; border: 2px solid #fff; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: bold; color: #030b14; box-shadow: 0 0 14px #00f2fe; cursor: pointer; white-space: nowrap; }
     .vessel-marker:hover { transform: scale(1.05); }
@@ -472,24 +520,19 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
     // 100% Dynamic Net Targets from Database (Strictly 0 when cleared)
     var dbTargets = ${targetMarkersJson};
     dbTargets.forEach(function(t) {
-      var markerClass = 'marker-confirmed';
-      var dot = '🟢';
-      if (t.dbt_status === 'pending') {
-        markerClass = 'marker-pending';
-        dot = '🟡';
-      }
       var icon = L.divIcon({
-        className: 'custom-net-marker ' + markerClass,
-        html: dot,
+        className: 'custom-net-marker ' + t.markerClass,
+        html: t.dot,
         iconSize: [26, 26]
       });
       var marker = L.marker([t.lat, t.lon], { icon: icon }).addTo(map);
+      var displayWeight = t.weight >= 100 ? (t.weight / 1000).toFixed(1) + " Tons (" + t.weight + " kg)" : t.weight + " kg";
       marker.bindPopup(
         "<b>" + t.id + "</b><br>" +
         "Gear: " + t.gear + "<br>" +
-        "Depth: " + t.depth + "m | Est. Weight: " + t.weight + "kg<br>" +
+        "Depth: " + t.depth + "m | Est. Weight: " + displayWeight + "<br>" +
         "Reporter: " + t.name + " (" + t.boat + ")<br>" +
-        "DBT Status: " + t.dbt_status.toUpperCase()
+        "<b>Status: " + t.status + "</b>"
       );
     });
   </script>
@@ -632,7 +675,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
               </Text>
               <View style={[styles.navBadge, { backgroundColor: '#065f46' }]}>
                 <Text style={[styles.navBadgeText, { color: '#34d399' }]}>
-                  {missions.length > 0 ? `${missions.length}/3` : '0/0'}
+                  {missions.length > 0 ? `${missions.length}/${totalVessels}` : '0/0'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -754,23 +797,27 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                         <View style={styles.legendItem}>
                           <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
                           <Text style={styles.legendText}>
-                            Pending Sonar / DBT ({pendingReports.length})
+                            Pending ({reports.filter(r => !missions.some(m => m.report_id === r.id)).length})
+                          </Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: '#00f2fe' }]} />
+                          <Text style={styles.legendText}>
+                            Taken ({missions.filter(m => m.status === 'active').length})
                           </Text>
                         </View>
                         <View style={styles.legendItem}>
                           <View style={[styles.legendDot, { backgroundColor: '#00e475' }]} />
                           <Text style={styles.legendText}>
-                            Confirmed / Disbursed ({disbursedReports.length})
+                            Rescued ({missions.filter(m => m.status === 'completed').length})
                           </Text>
                         </View>
-                        {missions.length > 0 && (
-                          <View style={styles.legendItem}>
-                            <View style={[styles.legendDot, { backgroundColor: '#00f2fe' }]} />
-                            <Text style={styles.legendText}>
-                              Fleet Vessels ({missions.length})
-                            </Text>
-                          </View>
-                        )}
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: '#00f2fe', borderRadius: 2 }]} />
+                          <Text style={styles.legendText}>
+                            Fleet Vessels ({totalVessels})
+                          </Text>
+                        </View>
                       </View>
                     </View>
                   </View>
@@ -1113,7 +1160,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                     <View style={styles.greenOnlinePill}>
                       <View style={styles.pulseDot} />
                       <Text style={styles.greenOnlineText}>
-                        {missions.length > 0 ? `${missions.length} / 3 VESSELS ONLINE` : '0 / 0 VESSELS ONLINE'}
+                        {missions.length > 0 ? `${missions.length} / ${totalVessels} VESSELS ONLINE` : '0 / 0 VESSELS ONLINE'}
                       </Text>
                     </View>
                   </View>
@@ -1123,10 +1170,10 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                     <View style={styles.whiteFleetStatCard}>
                       <Text style={styles.whiteFleetStatLabel}>ACTIVE AT SEA</Text>
                       <Text style={styles.whiteFleetStatVal}>
-                        {missions.length > 0 ? `${missions.length} / 3` : '0 / 0'}
+                        {missions.length > 0 ? `${missions.length} / ${totalVessels}` : '0 / 0'}
                       </Text>
                       <Text style={styles.whiteFleetStatSub}>
-                        {missions.length > 0 ? '3 in Harbor Readiness' : '0 in Harbor Readiness'}
+                        {missions.length > 0 ? `${totalVessels} in Harbor Readiness` : '0 in Harbor Readiness'}
                       </Text>
                     </View>
                     <View style={styles.whiteFleetStatCard}>
