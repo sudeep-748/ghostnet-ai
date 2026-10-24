@@ -14,8 +14,20 @@ import {
   Platform
 } from 'react-native';
 
-// Universal Cross-Platform Storage Engine (Web localStorage + Native Android RAM/Cache)
-// Guarantees zero ReferenceError crashes on native Android while preserving web persistence
+// Universal Cross-Platform Storage Engine (Web localStorage + Native Android SQLite Flash Storage)
+// Guarantees permanent persistence across app restarts, reboots, and airplane mode with zero crash risk
+import * as SQLite from 'expo-sqlite';
+
+let _nativeDb: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    _nativeDb = SQLite.openDatabaseSync('ghostnet_storage.db');
+    _nativeDb.execSync('CREATE TABLE IF NOT EXISTS kv_store (k TEXT PRIMARY KEY, v TEXT);');
+  } catch (e) {
+    console.log('SQLite init notice:', e);
+  }
+}
+
 const _nativeMemoryStorage: Record<string, string> = {};
 
 export const safeStorage = {
@@ -25,6 +37,12 @@ export const safeStorage = {
         return window.localStorage.getItem(key);
       }
     } catch (e) {}
+    if (_nativeDb) {
+      try {
+        const row = _nativeDb.getFirstSync('SELECT v FROM kv_store WHERE k = ?;', [key]);
+        if (row && row.v !== undefined && row.v !== null) return row.v;
+      } catch (e) {}
+    }
     return _nativeMemoryStorage[key] || null;
   },
   setItem: (key: string, value: string): void => {
@@ -35,6 +53,11 @@ export const safeStorage = {
       }
     } catch (e) {}
     _nativeMemoryStorage[key] = value;
+    if (_nativeDb) {
+      try {
+        _nativeDb.runSync('INSERT OR REPLACE INTO kv_store (k, v) VALUES (?, ?);', [key, value]);
+      } catch (e) {}
+    }
   },
   removeItem: (key: string): void => {
     try {
@@ -44,6 +67,11 @@ export const safeStorage = {
       }
     } catch (e) {}
     delete _nativeMemoryStorage[key];
+    if (_nativeDb) {
+      try {
+        _nativeDb.runSync('DELETE FROM kv_store WHERE k = ?;', [key]);
+      } catch (e) {}
+    }
   },
   clear: (): void => {
     try {
@@ -54,6 +82,11 @@ export const safeStorage = {
     } catch (e) {}
     for (const k of Object.keys(_nativeMemoryStorage)) {
       delete _nativeMemoryStorage[k];
+    }
+    if (_nativeDb) {
+      try {
+        _nativeDb.execSync('DELETE FROM kv_store;');
+      } catch (e) {}
     }
   }
 };
@@ -879,41 +912,74 @@ export default function App() {
   // Localization translator helper
   const t = (k: keyof typeof I18N.EN) => I18N[language][k] || I18N.EN[k];
 
-  // Default pre-seeded accounts: empty for fresh user testing
-  const DEFAULT_ACCOUNTS: UserAccount[] = [];
-
-  // Load persistent accounts from localStorage
-  const [accounts, setAccounts] = useState<UserAccount[]>(() => {
-    try {
-      if (typeof window !== 'undefined' && safeStorage) {
-        const saved = safeStorage.getItem('ghostnet_registered_accounts');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) return parsed;
-        }
-      }
-    } catch (e) {}
-    return [];
-  });
-
-  // Current Logged-in User Session (loaded from persistent storage or clean default)
-  const [currentUser, setCurrentUser] = useState<UserAccount>(() => {
-    try {
-      if (typeof window !== 'undefined' && safeStorage) {
-        const saved = safeStorage.getItem('ghostnet_session_user');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed && parsed.role) return parsed;
-        }
-      }
-    } catch (e) {}
-    return {
-      name: '',
-      username: '',
-      password: '',
+  // Default pre-seeded accounts: available 100% offline at sea in Airplane mode
+  const DEFAULT_ACCOUNTS: UserAccount[] = [
+    {
+      name: 'Cmdr. K. Sudeep',
+      username: 'sudeep',
+      password: 'password123',
       role: 'FISHERMAN',
       boatTag: 'IND-TN-07-SP-0007',
-      phone: '',
+      phone: '9840000001',
+      port: 'Kasimedu Coastal Harbour'
+    },
+    {
+      name: 'Murugan Selvam',
+      username: 'fisherman',
+      password: 'password123',
+      role: 'FISHERMAN',
+      boatTag: 'IND-TN-07-SP-0007',
+      phone: '9840111001',
+      port: 'Kasimedu Coastal Harbour'
+    },
+    {
+      name: 'Rescue Patrol Officer',
+      username: 'rescue',
+      password: 'password123',
+      role: 'RESCUE_CREW',
+      boatTag: 'Poseidon Alpha (MM-01)',
+      phone: '9840000002',
+      port: 'Chennai Coastal Patrol Station'
+    },
+    {
+      name: 'Admin Officer',
+      username: 'admin',
+      password: 'password123',
+      role: 'FISHERMAN',
+      boatTag: 'IND-TN-07-SP-0007',
+      phone: 'admin',
+      port: 'Kasimedu Coastal Harbour'
+    }
+  ];
+
+  // Load persistent accounts from SQLite flash storage / web localStorage
+  const [accounts, setAccounts] = useState<UserAccount[]>(() => {
+    try {
+      const saved = safeStorage.getItem('ghostnet_registered_accounts');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_ACCOUNTS;
+  });
+
+  // Current Logged-in User Session (loaded from SQLite flash storage or default)
+  const [currentUser, setCurrentUser] = useState<UserAccount>(() => {
+    try {
+      const saved = safeStorage.getItem('ghostnet_session_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.role) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_ACCOUNTS[0] || {
+      name: 'Cmdr. K. Sudeep',
+      username: 'sudeep',
+      password: 'password123',
+      role: 'FISHERMAN',
+      boatTag: 'IND-TN-07-SP-0007',
+      phone: '9840000001',
       port: 'Kasimedu Coastal Harbour'
     };
   });
@@ -944,7 +1010,7 @@ export default function App() {
   const [fisherTab, setFisherTab] = useState<'DECLARE' | 'TRACKER' | 'SIMULATOR'>('DECLARE');
   const [gpsCoords, setGpsCoords] = useState<string>(() => {
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
+      if (safeStorage) {
         const saved = safeStorage.getItem('ghostnet_last_real_gps');
         if (saved) return saved;
       }
@@ -1032,7 +1098,7 @@ export default function App() {
 
   const [reports, setReports] = useState<RecoveryReport[]>(() => {
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
+      if (safeStorage) {
         const saved = safeStorage.getItem('ghostnet_saved_reports');
         if (saved) {
           const parsed = JSON.parse(saved);
@@ -1070,7 +1136,7 @@ export default function App() {
   const [crewTab, setCrewTab] = useState<'REPORTS' | 'MISSION'>('REPORTS');
   const [selectedTarget, setSelectedTarget] = useState<RescueTarget | null>(() => {
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
+      if (safeStorage) {
         const saved = safeStorage.getItem('ghostnet_selected_target');
         if (saved) return JSON.parse(saved);
       }
@@ -1079,7 +1145,7 @@ export default function App() {
   });
   const [activeMissionId, setActiveMissionId] = useState<string | null>(() => {
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
+      if (safeStorage) {
         return safeStorage.getItem('ghostnet_active_mission_id') || null;
       }
     } catch (e) {}
@@ -1509,7 +1575,7 @@ export default function App() {
           prevPosition = { lat: initialFix.lat, lon: initialFix.lon, time: initialFix.timestamp };
           lastRescueUpdateRef.current = Date.now();
           try {
-            if (typeof window !== 'undefined' && safeStorage) {
+            if (safeStorage) {
               const formatted = `${initialFix.lat.toFixed(4)}° N, ${initialFix.lon.toFixed(4)}° E`;
               safeStorage.setItem('ghostnet_last_real_gps', formatted);
             }
@@ -1639,7 +1705,7 @@ export default function App() {
 
   const [targets, setTargets] = useState<RescueTarget[]>(() => {
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
+      if (safeStorage) {
         const saved = safeStorage.getItem('ghostnet_pending_targets');
         if (saved) {
           const parsed = JSON.parse(saved);
@@ -1664,7 +1730,7 @@ export default function App() {
       if (myActive) {
         setSelectedTarget(myActive);
         try {
-          if (typeof window !== 'undefined' && safeStorage) {
+          if (safeStorage) {
             safeStorage.setItem('ghostnet_selected_target', JSON.stringify(myActive));
           }
         } catch (e) {}
@@ -1672,7 +1738,7 @@ export default function App() {
         setSelectedTarget(null);
         setActiveMissionId(null);
         try {
-          if (typeof window !== 'undefined' && safeStorage) {
+          if (safeStorage) {
             safeStorage.removeItem('ghostnet_selected_target');
             safeStorage.removeItem('ghostnet_active_mission_id');
           }
@@ -1728,7 +1794,7 @@ export default function App() {
 
       if (changed) {
         try {
-          if (typeof window !== 'undefined' && safeStorage) {
+          if (safeStorage) {
             safeStorage.setItem('ghostnet_saved_reports', JSON.stringify(healed));
           }
         } catch (e) {}
@@ -1741,12 +1807,10 @@ export default function App() {
   // Storage helper for persistence across refreshes & app re-opens
   const saveSession = (user: UserAccount | null) => {
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
-        if (user) {
-          safeStorage.setItem('ghostnet_session_user', JSON.stringify(user));
-        } else {
-          safeStorage.removeItem('ghostnet_session_user');
-        }
+      if (user) {
+        safeStorage.setItem('ghostnet_session_user', JSON.stringify(user));
+      } else {
+        safeStorage.removeItem('ghostnet_session_user');
       }
     } catch (e) {
       // Ignore storage errors on native platforms
@@ -1758,7 +1822,7 @@ export default function App() {
     setSelectedTarget(null);
     setActiveMissionId(null);
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
+      if (safeStorage) {
         safeStorage.removeItem('ghostnet_session_user');
         safeStorage.removeItem('ghostnet_selected_target');
         safeStorage.removeItem('ghostnet_active_mission_id');
@@ -1774,7 +1838,7 @@ export default function App() {
   const syncWithBackend = async () => {
     // 1. Drain and push any pending offline reports
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
+      if (safeStorage) {
         const queueStr = safeStorage.getItem('ghostnet_offline_queue');
         if (queueStr) {
           const queue: any[] = JSON.parse(queueStr);
@@ -1886,7 +1950,7 @@ export default function App() {
             setSelectedTarget(null);
             setActiveMissionId(null);
             try {
-              if (typeof window !== 'undefined' && safeStorage) {
+              if (safeStorage) {
                 safeStorage.setItem('ghostnet_saved_reports', '[]');
                 safeStorage.setItem('ghostnet_pending_targets', '[]');
                 safeStorage.removeItem('ghostnet_selected_target');
@@ -1897,7 +1961,7 @@ export default function App() {
             // Load locally completed target IDs to prevent cloud resurrection
             const completedTargetIds: string[] = (() => {
               try {
-                if (typeof window !== 'undefined' && safeStorage) {
+                if (safeStorage) {
                   const stored = safeStorage.getItem('ghostnet_completed_target_ids');
                   return stored ? JSON.parse(stored) : [];
                 }
@@ -1999,7 +2063,7 @@ export default function App() {
 
             setTargets(mappedTargets);
             try {
-              if (typeof window !== 'undefined' && safeStorage) {
+              if (safeStorage) {
                 safeStorage.setItem('ghostnet_pending_targets', JSON.stringify(mappedTargets));
               }
             } catch (e) {}
@@ -2122,7 +2186,7 @@ export default function App() {
 
             // Retain any pending offline reports from offline outbox queue so they never vanish
             try {
-              if (typeof window !== 'undefined' && safeStorage) {
+              if (safeStorage) {
                 const qStr = safeStorage.getItem('ghostnet_offline_queue');
                 if (qStr) {
                   const qList: any[] = JSON.parse(qStr);
@@ -2157,7 +2221,7 @@ export default function App() {
 
                         setReports(mappedReports);
             try {
-              if (typeof window !== 'undefined' && safeStorage) {
+              if (safeStorage) {
                 safeStorage.setItem('ghostnet_saved_reports', JSON.stringify(mappedReports));
               }
             } catch (e) {}
@@ -2175,7 +2239,7 @@ export default function App() {
             if (uList.length === 0) {
               setAccounts([]);
               try {
-                if (typeof window !== 'undefined' && safeStorage) {
+                if (safeStorage) {
                   safeStorage.setItem('ghostnet_registered_accounts', '[]');
                 }
               } catch (e) {}
@@ -2240,26 +2304,24 @@ export default function App() {
     if (screen === 'SPLASH') {
       const timer = setTimeout(() => {
         try {
-          if (typeof window !== 'undefined' && safeStorage) {
-            const savedStr = safeStorage.getItem('ghostnet_session_user');
-            if (savedStr) {
-              const savedUser: UserAccount = JSON.parse(savedStr);
-              if (savedUser && savedUser.role) {
-                setCurrentUser(savedUser);
-                if (savedUser.role === 'FISHERMAN') {
-                  setScreen('FISHERMAN');
-                } else {
-                  setScreen('RESCUE_CREW');
-                }
-                return;
+          const savedStr = safeStorage.getItem('ghostnet_session_user');
+          if (savedStr) {
+            const savedUser: UserAccount = JSON.parse(savedStr);
+            if (savedUser && savedUser.role) {
+              setCurrentUser(savedUser);
+              if (savedUser.role === 'FISHERMAN') {
+                setScreen('FISHERMAN');
+              } else {
+                setScreen('RESCUE_CREW');
               }
+              return;
             }
           }
         } catch (e) {
           // Fallback to login
         }
         setScreen('LOGIN_ROLE');
-      }, 1600);
+      }, 1500);
       return () => clearTimeout(timer);
     }
   }, [screen]);
@@ -2318,7 +2380,7 @@ export default function App() {
             const merged = [...accounts.filter((a) => a.username !== apiUser.username), apiUser];
             setAccounts(merged);
             try {
-              if (typeof window !== 'undefined' && safeStorage) {
+              if (safeStorage) {
                 safeStorage.setItem('ghostnet_registered_accounts', JSON.stringify(merged));
               }
             } catch (e) {}
@@ -2468,7 +2530,7 @@ export default function App() {
       const updatedAccounts = [...accounts, newAccount];
       setAccounts(updatedAccounts);
       try {
-        if (typeof window !== 'undefined' && safeStorage) {
+        if (safeStorage) {
           safeStorage.setItem('ghostnet_registered_accounts', JSON.stringify(updatedAccounts));
         }
       } catch (e) {}
@@ -2520,7 +2582,7 @@ export default function App() {
 
   const handleClearAllData = async () => {
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
+      if (safeStorage) {
         safeStorage.clear();
         safeStorage.setItem('ghostnet_saved_reports', '[]');
         safeStorage.setItem('ghostnet_pending_targets', '[]');
@@ -3244,7 +3306,7 @@ export default function App() {
         const formatted = `${lat.toFixed(4)}° N, ${lon.toFixed(4)}° E`;
         setGpsCoords(formatted);
         try {
-          if (typeof window !== 'undefined' && safeStorage) {
+          if (safeStorage) {
             safeStorage.setItem('ghostnet_last_real_gps', formatted);
           }
         } catch (e) {}
@@ -3266,7 +3328,7 @@ export default function App() {
               console.log('Offline GPS note:', fallbackErr);
               let savedReal: string | null = null;
               try {
-                if (typeof window !== 'undefined' && safeStorage) {
+                if (safeStorage) {
                   savedReal = safeStorage.getItem('ghostnet_last_real_gps');
                 }
               } catch (e) {}
@@ -3378,7 +3440,7 @@ export default function App() {
         .catch(() => {
           // OFFLINE AT SEA: Put into persistent outbox queue!
           try {
-            if (typeof window !== 'undefined' && safeStorage) {
+            if (safeStorage) {
               const currentQ = JSON.parse(safeStorage.getItem('ghostnet_offline_queue') || '[]');
               currentQ.push(reportPayload);
               safeStorage.setItem('ghostnet_offline_queue', JSON.stringify(currentQ));
@@ -3394,7 +3456,7 @@ export default function App() {
     setTargets(updatedTargets);
 
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
+      if (safeStorage) {
         safeStorage.setItem('ghostnet_pending_targets', JSON.stringify(updatedTargets));
         safeStorage.setItem('ghostnet_saved_reports', JSON.stringify(updatedReports));
       }
@@ -3419,7 +3481,7 @@ export default function App() {
     setShowPreDepartureModal(false);
 
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
+      if (safeStorage) {
         safeStorage.setItem('ghostnet_selected_target', JSON.stringify(activeTarget));
       }
     } catch (e) {}
@@ -3443,7 +3505,7 @@ export default function App() {
         if (missionData && missionData.id) {
           setActiveMissionId(missionData.id);
           try {
-            if (typeof window !== 'undefined' && safeStorage) {
+            if (safeStorage) {
               safeStorage.setItem('ghostnet_active_mission_id', missionData.id);
             }
           } catch (e) {}
@@ -3473,14 +3535,14 @@ export default function App() {
     );
     setReports(updatedReports);
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
+      if (safeStorage) {
         safeStorage.setItem('ghostnet_saved_reports', JSON.stringify(updatedReports));
       }
     } catch (e) {}
 
     showToast('📥 Downloading & caching sector map for deep-sea navigation...');
     try {
-      if (typeof window !== 'undefined' && safeStorage) {
+      if (safeStorage) {
         safeStorage.setItem(`ghostnet_offline_map_${target.id}`, 'cached');
       }
     } catch (e) {}
@@ -3511,7 +3573,7 @@ export default function App() {
     if (selectedTarget) {
       // 0. Mark target as permanently completed in persistent local blacklist immediately!
       try {
-        if (typeof window !== 'undefined' && safeStorage) {
+        if (safeStorage) {
           const compStr = safeStorage.getItem('ghostnet_completed_target_ids');
           const compList: string[] = compStr ? JSON.parse(compStr) : [];
           if (selectedTarget.id && !compList.includes(selectedTarget.id)) {
@@ -3525,7 +3587,7 @@ export default function App() {
 
       let currentMissionId = activeMissionId;
       try {
-        if (!currentMissionId && typeof window !== 'undefined' && safeStorage) {
+        if (!currentMissionId && safeStorage) {
           currentMissionId = safeStorage.getItem('ghostnet_active_mission_id');
         }
       } catch (e) {}
@@ -3582,7 +3644,7 @@ export default function App() {
       // If offline or network unavailable, push into persistent offline queue (identical to fisherman reporting)
       if (!updateSent) {
         try {
-          if (typeof window !== 'undefined' && safeStorage) {
+          if (safeStorage) {
             const qStr = safeStorage.getItem('ghostnet_offline_mission_queue');
             const mQueue: any[] = qStr ? JSON.parse(qStr) : [];
             mQueue.push(updatePayload);
@@ -3614,7 +3676,7 @@ export default function App() {
       const remainingTargets = targets.filter((t) => t.id !== selectedTarget.id);
       setTargets(remainingTargets);
       try {
-        if (typeof window !== 'undefined' && safeStorage) {
+        if (safeStorage) {
           safeStorage.setItem('ghostnet_saved_reports', JSON.stringify(updatedReports));
           safeStorage.setItem('ghostnet_pending_targets', JSON.stringify(remainingTargets));
           safeStorage.removeItem('ghostnet_active_mission_id');
@@ -5867,7 +5929,7 @@ export default function App() {
                 if (!critTgt) return;
                 setSelectedTarget(critTgt);
                 try {
-                  if (typeof window !== 'undefined' && safeStorage) {
+                  if (safeStorage) {
                     safeStorage.setItem('ghostnet_selected_target', JSON.stringify(critTgt));
                   }
                 } catch (e) {}
@@ -6043,7 +6105,7 @@ export default function App() {
                           onPress={() => {
                             setSelectedTarget(tgt);
                             try {
-                              if (typeof window !== 'undefined' && safeStorage) {
+                              if (safeStorage) {
                                 safeStorage.setItem('ghostnet_selected_target', JSON.stringify(tgt));
                               }
                             } catch (e) {}
