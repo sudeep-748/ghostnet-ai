@@ -21,27 +21,40 @@ const _nativeMemoryStorage: Record<string, string> = {};
 export const safeStorage = {
   getItem: (key: string): string | null => {
     try {
-      if (typeof window !== 'undefined' && window && safeStorage) {
-        return safeStorage.getItem(key);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window && 'localStorage' in window) {
+        return window.localStorage.getItem(key);
       }
     } catch (e) {}
     return _nativeMemoryStorage[key] || null;
   },
   setItem: (key: string, value: string): void => {
     try {
-      if (typeof window !== 'undefined' && window && safeStorage) {
-        safeStorage.setItem(key, value);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window && 'localStorage' in window) {
+        window.localStorage.setItem(key, value);
+        return;
       }
     } catch (e) {}
     _nativeMemoryStorage[key] = value;
   },
   removeItem: (key: string): void => {
     try {
-      if (typeof window !== 'undefined' && window && safeStorage) {
-        safeStorage.removeItem(key);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window && 'localStorage' in window) {
+        window.localStorage.removeItem(key);
+        return;
       }
     } catch (e) {}
     delete _nativeMemoryStorage[key];
+  },
+  clear: (): void => {
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window && 'localStorage' in window) {
+        window.localStorage.clear();
+        return;
+      }
+    } catch (e) {}
+    for (const k of Object.keys(_nativeMemoryStorage)) {
+      delete _nativeMemoryStorage[k];
+    }
   }
 };
 import { StatusBar } from 'expo-status-bar';
@@ -124,7 +137,7 @@ async function analyzeSonarPassOffline(
       primaryBox: { classId: 0, className: 'ghost_net', confidence: 0.0, x: 55.5, y: 21, width: 29, height: 59 }
     };
 
-    if (typeof document === 'undefined') {
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || typeof window === 'undefined') {
       return resolve(fallbackResult);
     }
 
@@ -960,7 +973,7 @@ export default function App() {
         showToast(`🎯 Destination set: ${newDest.lat.toFixed(4)}°N, ${newDest.lon.toFixed(4)}°E`);
       }
     };
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.addEventListener('message', handleMapMessage);
       return () => window.removeEventListener('message', handleMapMessage);
     }
@@ -1091,7 +1104,7 @@ export default function App() {
 
   // Folder-based dynamic ingestion handler (connects to vessel LAN recording folder)
   const handlePickSonarFolder = () => {
-    if (typeof document === 'undefined') return;
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     const input = document.createElement('input');
     input.type = 'file';
     (input as any).webkitdirectory = true;
@@ -2195,18 +2208,22 @@ export default function App() {
       }
     };
 
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.addEventListener('online', handleResume);
       window.addEventListener('focus', handleResume);
-      document.addEventListener('visibilitychange', handleResume);
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', handleResume);
+      }
     }
 
     return () => {
       clearInterval(interval);
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.removeEventListener('online', handleResume);
         window.removeEventListener('focus', handleResume);
-        document.removeEventListener('visibilitychange', handleResume);
+        if (typeof document !== 'undefined') {
+          document.removeEventListener('visibilitychange', handleResume);
+        }
       }
     };
   }, []);
@@ -6666,7 +6683,7 @@ export default function App() {
                     marginTop: 10
                   }}
                   onPress={() => {
-                    if (typeof document !== 'undefined') {
+                    if (Platform.OS === 'web' && typeof document !== 'undefined') {
                       const el = document.getElementById('modal-sonar-file-input');
                       if (el) el.click();
                     }
@@ -6678,7 +6695,7 @@ export default function App() {
                 </TouchableOpacity>
 
                 {/* Actual file input rendered inside modal */}
-                {typeof document !== 'undefined' && (
+                {Platform.OS === 'web' && typeof document !== 'undefined' && (
                   <input
                     id="modal-sonar-file-input"
                     type="file"
@@ -6712,7 +6729,7 @@ export default function App() {
                   }}
                   onPress={async () => {
                     if (pendingUploadFiles.length === 0) {
-                      if (typeof document !== 'undefined') {
+                      if (Platform.OS === 'web' && typeof document !== 'undefined') {
                         const el = document.getElementById('modal-sonar-file-input');
                         if (el) el.click();
                       }

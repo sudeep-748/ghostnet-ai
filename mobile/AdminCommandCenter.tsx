@@ -238,18 +238,22 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
       }
     };
 
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.addEventListener('online', handleResume);
       window.addEventListener('focus', handleResume);
-      document.addEventListener('visibilitychange', handleResume);
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', handleResume);
+      }
     }
 
     return () => {
       clearInterval(interval);
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.removeEventListener('online', handleResume);
         window.removeEventListener('focus', handleResume);
-        document.removeEventListener('visibilitychange', handleResume);
+        if (typeof document !== 'undefined') {
+          document.removeEventListener('visibilitychange', handleResume);
+        }
       }
     };
   }, []);
@@ -349,13 +353,15 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
           `${r.id},"${r.name}","${r.boatTag}","${r.area || 'Kasimedu'}","${r.gear}",${r.weight},${r.depth},${r.sonarMatch || 94.2}%,${r.dbt_amount || 25000},${r.dbt_status.toUpperCase()}`
       )
       .join('\n');
-    const blob = new Blob([headers + rows], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `TN_Fisheries_DBT_Audit_Live_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const blob = new Blob([headers + rows], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `TN_Fisheries_DBT_Audit_Live_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
     if (onShowToast) {
       onShowToast('📥 Live DBT database audit records exported to CSV!');
     }
