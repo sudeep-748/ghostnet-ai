@@ -10,8 +10,40 @@ import {
   Image,
   SafeAreaView,
   Alert,
-  Linking
+  Linking,
+  Platform
 } from 'react-native';
+
+// Universal Cross-Platform Storage Engine (Web localStorage + Native Android RAM/Cache)
+// Guarantees zero ReferenceError crashes on native Android while preserving web persistence
+const _nativeMemoryStorage: Record<string, string> = {};
+
+export const safeStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      if (typeof window !== 'undefined' && window && safeStorage) {
+        return safeStorage.getItem(key);
+      }
+    } catch (e) {}
+    return _nativeMemoryStorage[key] || null;
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      if (typeof window !== 'undefined' && window && safeStorage) {
+        safeStorage.setItem(key, value);
+      }
+    } catch (e) {}
+    _nativeMemoryStorage[key] = value;
+  },
+  removeItem: (key: string): void => {
+    try {
+      if (typeof window !== 'undefined' && window && safeStorage) {
+        safeStorage.removeItem(key);
+      }
+    } catch (e) {}
+    delete _nativeMemoryStorage[key];
+  }
+};
 import { StatusBar } from 'expo-status-bar';
 import { AdminCommandCenter } from './AdminCommandCenter';
 import { SONAR_PASS_DATA_URIS } from './sonarAssets';
@@ -840,8 +872,8 @@ export default function App() {
   // Load persistent accounts from localStorage
   const [accounts, setAccounts] = useState<UserAccount[]>(() => {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const saved = window.localStorage.getItem('ghostnet_registered_accounts');
+      if (typeof window !== 'undefined' && safeStorage) {
+        const saved = safeStorage.getItem('ghostnet_registered_accounts');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) return parsed;
@@ -854,8 +886,8 @@ export default function App() {
   // Current Logged-in User Session (loaded from persistent storage or clean default)
   const [currentUser, setCurrentUser] = useState<UserAccount>(() => {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const saved = window.localStorage.getItem('ghostnet_session_user');
+      if (typeof window !== 'undefined' && safeStorage) {
+        const saved = safeStorage.getItem('ghostnet_session_user');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed && parsed.role) return parsed;
@@ -899,8 +931,8 @@ export default function App() {
   const [fisherTab, setFisherTab] = useState<'DECLARE' | 'TRACKER' | 'SIMULATOR'>('DECLARE');
   const [gpsCoords, setGpsCoords] = useState<string>(() => {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const saved = window.localStorage.getItem('ghostnet_last_real_gps');
+      if (typeof window !== 'undefined' && safeStorage) {
+        const saved = safeStorage.getItem('ghostnet_last_real_gps');
         if (saved) return saved;
       }
     } catch (e) {}
@@ -987,8 +1019,8 @@ export default function App() {
 
   const [reports, setReports] = useState<RecoveryReport[]>(() => {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const saved = window.localStorage.getItem('ghostnet_saved_reports');
+      if (typeof window !== 'undefined' && safeStorage) {
+        const saved = safeStorage.getItem('ghostnet_saved_reports');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -1025,8 +1057,8 @@ export default function App() {
   const [crewTab, setCrewTab] = useState<'REPORTS' | 'MISSION'>('REPORTS');
   const [selectedTarget, setSelectedTarget] = useState<RescueTarget | null>(() => {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const saved = window.localStorage.getItem('ghostnet_selected_target');
+      if (typeof window !== 'undefined' && safeStorage) {
+        const saved = safeStorage.getItem('ghostnet_selected_target');
         if (saved) return JSON.parse(saved);
       }
     } catch (e) {}
@@ -1034,8 +1066,8 @@ export default function App() {
   });
   const [activeMissionId, setActiveMissionId] = useState<string | null>(() => {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        return window.localStorage.getItem('ghostnet_active_mission_id') || null;
+      if (typeof window !== 'undefined' && safeStorage) {
+        return safeStorage.getItem('ghostnet_active_mission_id') || null;
       }
     } catch (e) {}
     return null;
@@ -1464,9 +1496,9 @@ export default function App() {
           prevPosition = { lat: initialFix.lat, lon: initialFix.lon, time: initialFix.timestamp };
           lastRescueUpdateRef.current = Date.now();
           try {
-            if (typeof window !== 'undefined' && window.localStorage) {
+            if (typeof window !== 'undefined' && safeStorage) {
               const formatted = `${initialFix.lat.toFixed(4)}° N, ${initialFix.lon.toFixed(4)}° E`;
-              window.localStorage.setItem('ghostnet_last_real_gps', formatted);
+              safeStorage.setItem('ghostnet_last_real_gps', formatted);
             }
           } catch (e) {}
         },
@@ -1594,8 +1626,8 @@ export default function App() {
 
   const [targets, setTargets] = useState<RescueTarget[]>(() => {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const saved = window.localStorage.getItem('ghostnet_pending_targets');
+      if (typeof window !== 'undefined' && safeStorage) {
+        const saved = safeStorage.getItem('ghostnet_pending_targets');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) return parsed;
@@ -1619,17 +1651,17 @@ export default function App() {
       if (myActive) {
         setSelectedTarget(myActive);
         try {
-          if (typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.setItem('ghostnet_selected_target', JSON.stringify(myActive));
+          if (typeof window !== 'undefined' && safeStorage) {
+            safeStorage.setItem('ghostnet_selected_target', JSON.stringify(myActive));
           }
         } catch (e) {}
       } else {
         setSelectedTarget(null);
         setActiveMissionId(null);
         try {
-          if (typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.removeItem('ghostnet_selected_target');
-            window.localStorage.removeItem('ghostnet_active_mission_id');
+          if (typeof window !== 'undefined' && safeStorage) {
+            safeStorage.removeItem('ghostnet_selected_target');
+            safeStorage.removeItem('ghostnet_active_mission_id');
           }
         } catch (e) {}
       }
@@ -1683,8 +1715,8 @@ export default function App() {
 
       if (changed) {
         try {
-          if (typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.setItem('ghostnet_saved_reports', JSON.stringify(healed));
+          if (typeof window !== 'undefined' && safeStorage) {
+            safeStorage.setItem('ghostnet_saved_reports', JSON.stringify(healed));
           }
         } catch (e) {}
         return healed;
@@ -1696,11 +1728,11 @@ export default function App() {
   // Storage helper for persistence across refreshes & app re-opens
   const saveSession = (user: UserAccount | null) => {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
+      if (typeof window !== 'undefined' && safeStorage) {
         if (user) {
-          window.localStorage.setItem('ghostnet_session_user', JSON.stringify(user));
+          safeStorage.setItem('ghostnet_session_user', JSON.stringify(user));
         } else {
-          window.localStorage.removeItem('ghostnet_session_user');
+          safeStorage.removeItem('ghostnet_session_user');
         }
       }
     } catch (e) {
@@ -1713,10 +1745,10 @@ export default function App() {
     setSelectedTarget(null);
     setActiveMissionId(null);
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.removeItem('ghostnet_session_user');
-        window.localStorage.removeItem('ghostnet_selected_target');
-        window.localStorage.removeItem('ghostnet_active_mission_id');
+      if (typeof window !== 'undefined' && safeStorage) {
+        safeStorage.removeItem('ghostnet_session_user');
+        safeStorage.removeItem('ghostnet_selected_target');
+        safeStorage.removeItem('ghostnet_active_mission_id');
       }
     } catch (e) {}
     setScreen('LOGIN_ROLE');
@@ -1729,8 +1761,8 @@ export default function App() {
   const syncWithBackend = async () => {
     // 1. Drain and push any pending offline reports
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const queueStr = window.localStorage.getItem('ghostnet_offline_queue');
+      if (typeof window !== 'undefined' && safeStorage) {
+        const queueStr = safeStorage.getItem('ghostnet_offline_queue');
         if (queueStr) {
           const queue: any[] = JSON.parse(queueStr);
           if (Array.isArray(queue) && queue.length > 0) {
@@ -1741,13 +1773,13 @@ export default function App() {
                 body: JSON.stringify(item)
               });
             }
-            window.localStorage.removeItem('ghostnet_offline_queue');
+            safeStorage.removeItem('ghostnet_offline_queue');
             showToast('🟢 Shore connection restored: Offline reports synced to database!');
           }
         }
 
         // 1b. Drain and sync any unsynced offline-created user accounts to ghostnet_dev.db!
-        const unsyncedStr = window.localStorage.getItem('ghostnet_unsynced_accounts');
+        const unsyncedStr = safeStorage.getItem('ghostnet_unsynced_accounts');
         if (unsyncedStr) {
           const accList: UserAccount[] = JSON.parse(unsyncedStr);
           if (Array.isArray(accList) && accList.length > 0) {
@@ -1764,12 +1796,12 @@ export default function App() {
                 })
               }).catch(() => {});
             }
-            window.localStorage.removeItem('ghostnet_unsynced_accounts');
+            safeStorage.removeItem('ghostnet_unsynced_accounts');
           }
         }
 
         // 1c. Drain and sync pending offline recovery mission completions!
-        const missionQueueStr = window.localStorage.getItem('ghostnet_offline_mission_queue');
+        const missionQueueStr = safeStorage.getItem('ghostnet_offline_mission_queue');
         if (missionQueueStr) {
           const mQueue: any[] = JSON.parse(missionQueueStr);
           if (Array.isArray(mQueue) && mQueue.length > 0) {
@@ -1807,9 +1839,9 @@ export default function App() {
               }
             }
             if (remainingMQueue.length > 0) {
-              window.localStorage.setItem('ghostnet_offline_mission_queue', JSON.stringify(remainingMQueue));
+              safeStorage.setItem('ghostnet_offline_mission_queue', JSON.stringify(remainingMQueue));
             } else {
-              window.localStorage.removeItem('ghostnet_offline_mission_queue');
+              safeStorage.removeItem('ghostnet_offline_mission_queue');
               showToast('🟢 Shore connection restored: Offline recovery logged to database!');
             }
           }
@@ -1841,19 +1873,19 @@ export default function App() {
             setSelectedTarget(null);
             setActiveMissionId(null);
             try {
-              if (typeof window !== 'undefined' && window.localStorage) {
-                window.localStorage.setItem('ghostnet_saved_reports', '[]');
-                window.localStorage.setItem('ghostnet_pending_targets', '[]');
-                window.localStorage.removeItem('ghostnet_selected_target');
-                window.localStorage.removeItem('ghostnet_active_mission_id');
+              if (typeof window !== 'undefined' && safeStorage) {
+                safeStorage.setItem('ghostnet_saved_reports', '[]');
+                safeStorage.setItem('ghostnet_pending_targets', '[]');
+                safeStorage.removeItem('ghostnet_selected_target');
+                safeStorage.removeItem('ghostnet_active_mission_id');
               }
             } catch (e) {}
           } else {
             // Load locally completed target IDs to prevent cloud resurrection
             const completedTargetIds: string[] = (() => {
               try {
-                if (typeof window !== 'undefined' && window.localStorage) {
-                  const stored = window.localStorage.getItem('ghostnet_completed_target_ids');
+                if (typeof window !== 'undefined' && safeStorage) {
+                  const stored = safeStorage.getItem('ghostnet_completed_target_ids');
                   return stored ? JSON.parse(stored) : [];
                 }
               } catch (e) {}
@@ -1954,8 +1986,8 @@ export default function App() {
 
             setTargets(mappedTargets);
             try {
-              if (typeof window !== 'undefined' && window.localStorage) {
-                window.localStorage.setItem('ghostnet_pending_targets', JSON.stringify(mappedTargets));
+              if (typeof window !== 'undefined' && safeStorage) {
+                safeStorage.setItem('ghostnet_pending_targets', JSON.stringify(mappedTargets));
               }
             } catch (e) {}
 
@@ -2077,8 +2109,8 @@ export default function App() {
 
             // Retain any pending offline reports from offline outbox queue so they never vanish
             try {
-              if (typeof window !== 'undefined' && window.localStorage) {
-                const qStr = window.localStorage.getItem('ghostnet_offline_queue');
+              if (typeof window !== 'undefined' && safeStorage) {
+                const qStr = safeStorage.getItem('ghostnet_offline_queue');
                 if (qStr) {
                   const qList: any[] = JSON.parse(qStr);
                   if (Array.isArray(qList)) {
@@ -2112,8 +2144,8 @@ export default function App() {
 
                         setReports(mappedReports);
             try {
-              if (typeof window !== 'undefined' && window.localStorage) {
-                window.localStorage.setItem('ghostnet_saved_reports', JSON.stringify(mappedReports));
+              if (typeof window !== 'undefined' && safeStorage) {
+                safeStorage.setItem('ghostnet_saved_reports', JSON.stringify(mappedReports));
               }
             } catch (e) {}
           }
@@ -2130,8 +2162,8 @@ export default function App() {
             if (uList.length === 0) {
               setAccounts([]);
               try {
-                if (typeof window !== 'undefined' && window.localStorage) {
-                  window.localStorage.setItem('ghostnet_registered_accounts', '[]');
+                if (typeof window !== 'undefined' && safeStorage) {
+                  safeStorage.setItem('ghostnet_registered_accounts', '[]');
                 }
               } catch (e) {}
             }
@@ -2191,8 +2223,8 @@ export default function App() {
     if (screen === 'SPLASH') {
       const timer = setTimeout(() => {
         try {
-          if (typeof window !== 'undefined' && window.localStorage) {
-            const savedStr = window.localStorage.getItem('ghostnet_session_user');
+          if (typeof window !== 'undefined' && safeStorage) {
+            const savedStr = safeStorage.getItem('ghostnet_session_user');
             if (savedStr) {
               const savedUser: UserAccount = JSON.parse(savedStr);
               if (savedUser && savedUser.role) {
@@ -2269,8 +2301,8 @@ export default function App() {
             const merged = [...accounts.filter((a) => a.username !== apiUser.username), apiUser];
             setAccounts(merged);
             try {
-              if (typeof window !== 'undefined' && window.localStorage) {
-                window.localStorage.setItem('ghostnet_registered_accounts', JSON.stringify(merged));
+              if (typeof window !== 'undefined' && safeStorage) {
+                safeStorage.setItem('ghostnet_registered_accounts', JSON.stringify(merged));
               }
             } catch (e) {}
 
@@ -2419,8 +2451,8 @@ export default function App() {
       const updatedAccounts = [...accounts, newAccount];
       setAccounts(updatedAccounts);
       try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-          window.localStorage.setItem('ghostnet_registered_accounts', JSON.stringify(updatedAccounts));
+        if (typeof window !== 'undefined' && safeStorage) {
+          safeStorage.setItem('ghostnet_registered_accounts', JSON.stringify(updatedAccounts));
         }
       } catch (e) {}
 
@@ -2471,11 +2503,11 @@ export default function App() {
 
   const handleClearAllData = async () => {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.clear();
-        window.localStorage.setItem('ghostnet_saved_reports', '[]');
-        window.localStorage.setItem('ghostnet_pending_targets', '[]');
-        window.localStorage.setItem('ghostnet_registered_accounts', '[]');
+      if (typeof window !== 'undefined' && safeStorage) {
+        safeStorage.clear();
+        safeStorage.setItem('ghostnet_saved_reports', '[]');
+        safeStorage.setItem('ghostnet_pending_targets', '[]');
+        safeStorage.setItem('ghostnet_registered_accounts', '[]');
       }
     } catch (e) {}
     setAccounts([]);
@@ -3195,8 +3227,8 @@ export default function App() {
         const formatted = `${lat.toFixed(4)}° N, ${lon.toFixed(4)}° E`;
         setGpsCoords(formatted);
         try {
-          if (typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.setItem('ghostnet_last_real_gps', formatted);
+          if (typeof window !== 'undefined' && safeStorage) {
+            safeStorage.setItem('ghostnet_last_real_gps', formatted);
           }
         } catch (e) {}
         showToast(
@@ -3217,8 +3249,8 @@ export default function App() {
               console.log('Offline GPS note:', fallbackErr);
               let savedReal: string | null = null;
               try {
-                if (typeof window !== 'undefined' && window.localStorage) {
-                  savedReal = window.localStorage.getItem('ghostnet_last_real_gps');
+                if (typeof window !== 'undefined' && safeStorage) {
+                  savedReal = safeStorage.getItem('ghostnet_last_real_gps');
                 }
               } catch (e) {}
               if (savedReal) {
@@ -3329,10 +3361,10 @@ export default function App() {
         .catch(() => {
           // OFFLINE AT SEA: Put into persistent outbox queue!
           try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-              const currentQ = JSON.parse(window.localStorage.getItem('ghostnet_offline_queue') || '[]');
+            if (typeof window !== 'undefined' && safeStorage) {
+              const currentQ = JSON.parse(safeStorage.getItem('ghostnet_offline_queue') || '[]');
               currentQ.push(reportPayload);
-              window.localStorage.setItem('ghostnet_offline_queue', JSON.stringify(currentQ));
+              safeStorage.setItem('ghostnet_offline_queue', JSON.stringify(currentQ));
               console.log('Report added to offline outbox queue for future sync.');
             }
           } catch (e) {}
@@ -3345,9 +3377,9 @@ export default function App() {
     setTargets(updatedTargets);
 
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem('ghostnet_pending_targets', JSON.stringify(updatedTargets));
-        window.localStorage.setItem('ghostnet_saved_reports', JSON.stringify(updatedReports));
+      if (typeof window !== 'undefined' && safeStorage) {
+        safeStorage.setItem('ghostnet_pending_targets', JSON.stringify(updatedTargets));
+        safeStorage.setItem('ghostnet_saved_reports', JSON.stringify(updatedReports));
       }
     } catch (e) {}
 
@@ -3370,8 +3402,8 @@ export default function App() {
     setShowPreDepartureModal(false);
 
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem('ghostnet_selected_target', JSON.stringify(activeTarget));
+      if (typeof window !== 'undefined' && safeStorage) {
+        safeStorage.setItem('ghostnet_selected_target', JSON.stringify(activeTarget));
       }
     } catch (e) {}
 
@@ -3394,8 +3426,8 @@ export default function App() {
         if (missionData && missionData.id) {
           setActiveMissionId(missionData.id);
           try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-              window.localStorage.setItem('ghostnet_active_mission_id', missionData.id);
+            if (typeof window !== 'undefined' && safeStorage) {
+              safeStorage.setItem('ghostnet_active_mission_id', missionData.id);
             }
           } catch (e) {}
         }
@@ -3424,15 +3456,15 @@ export default function App() {
     );
     setReports(updatedReports);
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem('ghostnet_saved_reports', JSON.stringify(updatedReports));
+      if (typeof window !== 'undefined' && safeStorage) {
+        safeStorage.setItem('ghostnet_saved_reports', JSON.stringify(updatedReports));
       }
     } catch (e) {}
 
     showToast('📥 Downloading & caching sector map for deep-sea navigation...');
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(`ghostnet_offline_map_${target.id}`, 'cached');
+      if (typeof window !== 'undefined' && safeStorage) {
+        safeStorage.setItem(`ghostnet_offline_map_${target.id}`, 'cached');
       }
     } catch (e) {}
 
@@ -3462,22 +3494,22 @@ export default function App() {
     if (selectedTarget) {
       // 0. Mark target as permanently completed in persistent local blacklist immediately!
       try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-          const compStr = window.localStorage.getItem('ghostnet_completed_target_ids');
+        if (typeof window !== 'undefined' && safeStorage) {
+          const compStr = safeStorage.getItem('ghostnet_completed_target_ids');
           const compList: string[] = compStr ? JSON.parse(compStr) : [];
           if (selectedTarget.id && !compList.includes(selectedTarget.id)) {
             compList.push(selectedTarget.id);
           }
           const rawRepId = selectedTarget.id.replace(/^tgt-/, 'rep-');
           if (!compList.includes(rawRepId)) compList.push(rawRepId);
-          window.localStorage.setItem('ghostnet_completed_target_ids', JSON.stringify(compList));
+          safeStorage.setItem('ghostnet_completed_target_ids', JSON.stringify(compList));
         }
       } catch (e) {}
 
       let currentMissionId = activeMissionId;
       try {
-        if (!currentMissionId && typeof window !== 'undefined' && window.localStorage) {
-          currentMissionId = window.localStorage.getItem('ghostnet_active_mission_id');
+        if (!currentMissionId && typeof window !== 'undefined' && safeStorage) {
+          currentMissionId = safeStorage.getItem('ghostnet_active_mission_id');
         }
       } catch (e) {}
 
@@ -3533,11 +3565,11 @@ export default function App() {
       // If offline or network unavailable, push into persistent offline queue (identical to fisherman reporting)
       if (!updateSent) {
         try {
-          if (typeof window !== 'undefined' && window.localStorage) {
-            const qStr = window.localStorage.getItem('ghostnet_offline_mission_queue');
+          if (typeof window !== 'undefined' && safeStorage) {
+            const qStr = safeStorage.getItem('ghostnet_offline_mission_queue');
             const mQueue: any[] = qStr ? JSON.parse(qStr) : [];
             mQueue.push(updatePayload);
-            window.localStorage.setItem('ghostnet_offline_mission_queue', JSON.stringify(mQueue));
+            safeStorage.setItem('ghostnet_offline_mission_queue', JSON.stringify(mQueue));
           }
         } catch (e) {}
       }
@@ -3565,11 +3597,11 @@ export default function App() {
       const remainingTargets = targets.filter((t) => t.id !== selectedTarget.id);
       setTargets(remainingTargets);
       try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-          window.localStorage.setItem('ghostnet_saved_reports', JSON.stringify(updatedReports));
-          window.localStorage.setItem('ghostnet_pending_targets', JSON.stringify(remainingTargets));
-          window.localStorage.removeItem('ghostnet_active_mission_id');
-          window.localStorage.removeItem('ghostnet_selected_target');
+        if (typeof window !== 'undefined' && safeStorage) {
+          safeStorage.setItem('ghostnet_saved_reports', JSON.stringify(updatedReports));
+          safeStorage.setItem('ghostnet_pending_targets', JSON.stringify(remainingTargets));
+          safeStorage.removeItem('ghostnet_active_mission_id');
+          safeStorage.removeItem('ghostnet_selected_target');
         }
       } catch (e) {}
 
@@ -4846,19 +4878,31 @@ export default function App() {
 
               {/* Interactive Marine Chart Card */}
               <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1.5, borderColor: '#1e3a5f', backgroundColor: '#071626' }}>
-                <iframe
-                  srcDoc={generateFishermanTrialHtml(
-                    simBoatCoords.lat,
-                    simBoatCoords.lon,
-                    currentUser?.boatTag || 'IND-TN-07-SP-0007',
-                    simDestCoords.lat,
-                    simDestCoords.lon,
-                    simDroppedCoords?.lat,
-                    simDroppedCoords?.lon
-                  )}
-                  style={{ width: '100%', height: 320, border: 'none' }}
-                  title="Fisherman Sea Trial Chart"
-                />
+                {Platform.OS === 'web' && typeof window !== 'undefined' ? (
+                  <iframe
+                    srcDoc={generateFishermanTrialHtml(
+                      simBoatCoords.lat,
+                      simBoatCoords.lon,
+                      currentUser?.boatTag || 'IND-TN-07-SP-0007',
+                      simDestCoords.lat,
+                      simDestCoords.lon,
+                      simDroppedCoords?.lat,
+                      simDroppedCoords?.lon
+                    )}
+                    style={{ width: '100%', height: 320, border: 'none' }}
+                    title="Fisherman Sea Trial Chart"
+                  />
+                ) : (
+                  <View style={{ height: 180, alignItems: 'center', justifyContent: 'center', backgroundColor: '#071626', padding: 16 }}>
+                    <Text style={{ fontSize: 28, marginBottom: 8 }}>🛰️</Text>
+                    <Text style={{ color: '#00e475', fontSize: 13, fontWeight: '800', fontFamily: 'monospace' }}>
+                      LIVE TACTICAL GPS: {simBoatCoords.lat.toFixed(4)}°N, {simBoatCoords.lon.toFixed(4)}°E
+                    </Text>
+                    <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 4 }}>
+                      Vessel Heading: {simDirection === 'OFFSHORE' ? '042° NE' : '220° SW'} • {currentUser?.boatTag || 'IND-TN-07-SP-0007'}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               {/* 4-Tile Telemetry Grid */}
@@ -5806,8 +5850,8 @@ export default function App() {
                 if (!critTgt) return;
                 setSelectedTarget(critTgt);
                 try {
-                  if (typeof window !== 'undefined' && window.localStorage) {
-                    window.localStorage.setItem('ghostnet_selected_target', JSON.stringify(critTgt));
+                  if (typeof window !== 'undefined' && safeStorage) {
+                    safeStorage.setItem('ghostnet_selected_target', JSON.stringify(critTgt));
                   }
                 } catch (e) {}
 
@@ -5982,8 +6026,8 @@ export default function App() {
                           onPress={() => {
                             setSelectedTarget(tgt);
                             try {
-                              if (typeof window !== 'undefined' && window.localStorage) {
-                                window.localStorage.setItem('ghostnet_selected_target', JSON.stringify(tgt));
+                              if (typeof window !== 'undefined' && safeStorage) {
+                                safeStorage.setItem('ghostnet_selected_target', JSON.stringify(tgt));
                               }
                             } catch (e) {}
                             setCrewTab('MISSION');

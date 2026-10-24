@@ -7,7 +7,8 @@ import {
   ScrollView,
   TextInput,
   Modal,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 
 const API_BASE = 'https://ghostnet-ai-production.up.railway.app';
@@ -775,7 +776,7 @@ export const AdminCommandCenter: React.FC<AdminCommandCenterProps> = ({
                   {/* Full-Width Master Map Container */}
                   <View style={styles.mapWorkspaceRow}>
                     <View style={styles.mapFrameWrapper}>
-                      {typeof window !== 'undefined' ? (
+                      {Platform.OS === 'web' && typeof window !== 'undefined' ? (
                         <iframe
                           srcDoc={generateDynamicMapHtml()}
                           style={{
