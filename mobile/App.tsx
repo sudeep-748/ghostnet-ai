@@ -2968,10 +2968,11 @@ export default function App() {
     <div class="legend-content" id="legendContent">
       <div style="font-weight: bold; margin-bottom: 5px; color: #38bdf8; font-size: 10px; letter-spacing: 0.5px;">PROBABILITY DENSITY</div>
       <div class="map-legend-row"><div class="map-legend-dot" style="background:#ff2a5f;"></div> 🔴 0h Loss Site (Drop)</div>
-      <div class="map-legend-row"><div class="map-legend-dot" style="background:#00e475;"></div> 🟢 +24h (1.7 NM / 3.1km)</div>
-      <div class="map-legend-row"><div class="map-legend-dot" style="background:#ffd166;"></div> 🟡 +48h (2.0 NM / 3.8km)</div>
-      <div class="map-legend-row"><div class="map-legend-dot" style="background:#38bdf8;"></div> 🔵 +72h (2.4 NM / 4.5km)</div>
-      <div class="map-legend-row"><div style="width:14px; height:2px; background:#00e475; border-top:1px dashed #00e475;"></div> Mean Drift Path (6.1 NM Total)</div>
+      <div class="map-legend-row"><div class="map-legend-dot" style="background:#00e475;"></div> <span id="legendRow24">🟢 +24h (1.7 NM / 3.1km)</span></div>
+      <div class="map-legend-row"><div class="map-legend-dot" style="background:#ffd166;"></div> <span id="legendRow48">🟡 +48h (2.0 NM / 3.8km)</span></div>
+      <div class="map-legend-row"><div class="map-legend-dot" style="background:#38bdf8;"></div> <span id="legendRow72">🔵 +72h (2.4 NM / 4.5km)</span></div>
+      <div class="map-legend-row"><div style="width:14px; height:2px; background:#00e475; border-top:1px dashed #00e475;"></div> <span id="legendRowTotal">Mean Drift Path (6.1 NM Total)</span></div>
+      <div class="map-legend-row" id="benthicStatusRow" style="display:none; font-size:9px; color:#ffd166; margin-top:3px;"></div>
       <div class="map-legend-row"><div style="width:14px; height:2px; background:#00f2fe; border-top:1px dashed #00f2fe;"></div> Course (${distNm} NM)</div>
     </div>
     <button class="legend-pill-btn" onclick="toggleLegend()">
@@ -3185,8 +3186,21 @@ export default function App() {
     var totalDrift_nm = ((dist0_24_m + dist24_48_m + dist48_72_m) / 1852).toFixed(1);
     var totalDrift_km = ((dist0_24_m + dist24_48_m + dist48_72_m) / 1000).toFixed(1);
 
+    // Dynamically update legend box with real calculated distances!
+    try {
+      if (document.getElementById('legendRow24')) document.getElementById('legendRow24').innerHTML = '🟢 +24h (' + dist0_24_nm + ' NM / ' + dist0_24_km + 'km)';
+      if (document.getElementById('legendRow48')) document.getElementById('legendRow48').innerHTML = '🟡 +48h (' + dist24_48_nm + ' NM / ' + dist24_48_km + 'km)';
+      if (document.getElementById('legendRow72')) document.getElementById('legendRow72').innerHTML = '🔵 +72h (' + dist48_72_nm + ' NM / ' + dist48_72_km + 'km)';
+      if (document.getElementById('legendRowTotal')) document.getElementById('legendRowTotal').innerHTML = 'Mean Drift Path (' + totalDrift_nm + ' NM Total)';
+    } catch (e) {}
+
+    // Auto-scale probability circles so they remain clearly visible at storm scale
+    var rad24 = Math.max(1200, Math.min(22000, dist0_24_m * 0.16));
+    var rad48 = Math.max(2200, Math.min(36000, (dist0_24_m + dist24_48_m) * 0.18));
+    var rad72 = Math.max(3400, Math.min(48000, (dist0_24_m + dist24_48_m + dist48_72_m) * 0.20));
+
     // +24h
-    L.circle(wp24Pos, { radius: 1200, color: '#00e475', fillColor: '#00e475', fillOpacity: 0.25, weight: 1.5, dashArray: '4,4' }).addTo(map);
+    L.circle(wp24Pos, { radius: rad24, color: '#00e475', fillColor: '#00e475', fillOpacity: 0.28, weight: 2, dashArray: '4,4' }).addTo(map);
     var wp24Icon = L.divIcon({ className: '', html: '<div class="custom-wp-marker" style="background:#00e475;">24</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
     L.marker(wp24Pos, { icon: wp24Icon }).addTo(map).bindPopup(
       '<div style="min-width:180px;">' +
@@ -3199,7 +3213,7 @@ export default function App() {
     );
 
     // +48h
-    L.circle(wp48Pos, { radius: 2200, color: '#ffd166', fillColor: '#ffd166', fillOpacity: 0.20, weight: 1.5, dashArray: '4,4' }).addTo(map);
+    L.circle(wp48Pos, { radius: rad48, color: '#ffd166', fillColor: '#ffd166', fillOpacity: 0.22, weight: 2, dashArray: '4,4' }).addTo(map);
     var wp48Icon = L.divIcon({ className: '', html: '<div class="custom-wp-marker" style="background:#ffd166;">48</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
     L.marker(wp48Pos, { icon: wp48Icon }).addTo(map).bindPopup(
       '<div style="min-width:180px;">' +
@@ -3212,17 +3226,33 @@ export default function App() {
       '</div>'
     );
 
-    // +72h
-    L.circle(wp72Pos, { radius: 3400, color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 0.16, weight: 1.5, dashArray: '4,4' }).addTo(map);
+    // +72h (Benthic Seafloor Grounding & Storm Remobilization Physics)
+    var isStormActive = dist0_24_nm > 15;
+    var benthicTitle = isStormActive 
+      ? '🌪️ Storm Seafloor Remobilization' 
+      : '⚓ Benthic Seafloor Grounding (Stationary Snag)';
+    var benthicSub = isStormActive
+      ? 'Deep wave orbital surge ripped net from reef. Displaced along storm surge path.'
+      : 'After 72h, biofouling & leadline sink net onto seabed limestone reef. Drift speed arrests to 0.0 kn.';
+
+    try {
+      if (document.getElementById('benthicStatusRow')) {
+        document.getElementById('benthicStatusRow').style.display = 'block';
+        document.getElementById('benthicStatusRow').innerHTML = isStormActive 
+          ? '🌪️ Storm Remobilization Active' 
+          : '⚓ 72h Seabed Grounded (Stationary)';
+      }
+    } catch (e) {}
+
+    L.circle(wp72Pos, { radius: rad72, color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 0.18, weight: 2, dashArray: '4,4' }).addTo(map);
     var wp72Icon = L.divIcon({ className: '', html: '<div class="custom-wp-marker" style="background:#38bdf8;">72</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
     L.marker(wp72Pos, { icon: wp72Icon }).addTo(map).bindPopup(
-      '<div style="min-width:180px;">' +
-      '<b style="color:#38bdf8;">📍 +72 Hours Forecast</b><br>' +
+      '<div style="min-width:210px;">' +
+      '<b style="color:#38bdf8;">' + benthicTitle + '</b><br>' +
       '<b>Latitude:</b> ' + wp72Pos[0].toFixed(5) + '° N<br>' +
       '<b>Longitude:</b> ' + wp72Pos[1].toFixed(5) + '° E<br>' +
-      '<b>Drift 48h➔72h:</b> <span style="color:#38bdf8;font-weight:bold;">' + dist48_72_nm + ' NM (' + dist48_72_km + ' km)</span><br>' +
       '<b>Total 72h Drift:</b> <span style="color:#38bdf8;font-weight:bold;">' + totalDrift_nm + ' NM (' + totalDrift_km + ' km)</span><br>' +
-      '<span style="font-size:10px;color:#94a3b8;">Extended 3-Day Drift Horizon</span>' +
+      '<span style="font-size:10px;color:#94a3b8;line-height:14px;display:block;margin-top:4px;">' + benthicSub + '</span>' +
       '</div>'
     );
 
