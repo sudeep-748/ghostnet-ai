@@ -1143,6 +1143,12 @@ export default function App() {
     } catch (e) {}
     return null;
   });
+  const [liveDriftOffsets, setLiveDriftOffsets] = useState<{
+    dlat24: number; dlon24: number;
+    dlat48: number; dlon48: number;
+    dlat72: number; dlon72: number;
+    windSummary?: string;
+  } | null>(null);
   const [activeMissionId, setActiveMissionId] = useState<string | null>(() => {
     try {
       if (safeStorage) {
@@ -2792,15 +2798,44 @@ export default function App() {
     isConfirmedLock: boolean = false,
     confirmedTarget?: any,
     confirmedLatNum?: number,
-    confirmedLonNum?: number
+    confirmedLonNum?: number,
+    driftOffsets?: { dlat24: number; dlon24: number; dlat48: number; dlon48: number; dlat72: number; dlon72: number } | null
   ) => {
-    // Member 1 Lagrangian drift trajectory points (+24h, +48h, +72h)
-    const wp24Lat = targetLat + 0.024;
-    const wp24Lon = targetLon + 0.014;
-    const wp48Lat = targetLat + 0.056;
-    const wp48Lon = targetLon + 0.024;
-    const wp72Lat = targetLat + 0.096;
-    const wp72Lon = targetLon + 0.032;
+    // Dynamic Hydrodynamic Lagrangian drift trajectory points (+24h, +48h, +72h)
+    let dlat24 = driftOffsets?.dlat24;
+    let dlon24 = driftOffsets?.dlon24;
+    let dlat48 = driftOffsets?.dlat48;
+    let dlon48 = driftOffsets?.dlon48;
+    let dlat72 = driftOffsets?.dlat72;
+    let dlon72 = driftOffsets?.dlon72;
+
+    if (dlat24 === undefined || dlon24 === undefined) {
+      // In cyclone zone (e.g. northern Bay of Bengal lat >= 15, lon >= 85), cyclonic rotation drifts left (-dlon)
+      const isNorthernCycloneZone = targetLat >= 15.0 && targetLon >= 85.0;
+      if (isNorthernCycloneZone) {
+        dlat24 = 0.055;
+        dlon24 = -0.035; // Curves to the LEFT (Westwards)
+        dlat48 = 0.110;
+        dlon48 = -0.070;
+        dlat72 = 0.165;
+        dlon72 = -0.105;
+      } else {
+        // Standard Kasimedu Coastal waters (drifts North-East)
+        dlat24 = 0.024;
+        dlon24 = 0.014;
+        dlat48 = 0.056;
+        dlon48 = 0.024;
+        dlat72 = 0.096;
+        dlon72 = 0.032;
+      }
+    }
+
+    const wp24Lat = targetLat + dlat24;
+    const wp24Lon = targetLon + dlon24;
+    const wp48Lat = targetLat + dlat48;
+    const wp48Lon = targetLon + dlon48;
+    const wp72Lat = targetLat + dlat72;
+    const wp72Lon = targetLon + dlon72;
 
     const centerLat = (boatLat + targetLat) / 2;
     const centerLon = (boatLon + targetLon) / 2;
@@ -3287,9 +3322,84 @@ export default function App() {
       isNetMarkedOnMap,
       detectedNetTarget,
       confLat,
-      confLon
+      confLon,
+      liveDriftOffsets
     );
-  }, [selectedTarget?.id, crewTab, isNetMarkedOnMap, detectedNetTarget]);
+  }, [selectedTarget?.id, selectedTarget?.coords, crewTab, isNetMarkedOnMap, detectedNetTarget, liveDriftOffsets]);
+
+  // Dynamic Real-Time Ocean Current & Wind Drift Calculation (Open-Meteo Weather + Marine API)
+  useEffect(() => {
+    if (!selectedTarget) return;
+    const { lat, lon } = parseCoordinates(selectedTarget.coords);
+    if (!lat || !lon) return;
+
+    let active = true;
+    const updateDynamicDrift = async () => {
+      try {
+        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=wind_speed_10m,wind_direction_10m`;
+        const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=ocean_current_velocity,ocean_current_direction`;
+
+        const [wRes, mRes] = await Promise.all([
+          fetch(weatherUrl).catch(() => null),
+          fetch(marineUrl).catch(() => null)
+        ]);
+
+        let wSpeedKmh = 14.0;
+        let wDirFrom = 45.0;
+        if (wRes && wRes.ok) {
+          const wData = await wRes.json();
+          if (wData?.current) {
+            wSpeedKmh = wData.current.wind_speed_10m ?? 14.0;
+            wDirFrom = wData.current.wind_direction_10m ?? 45.0;
+          }
+        }
+
+        let cSpeedMs = 0.45;
+        let cDirTo = 35.0;
+        if (mRes && mRes.ok) {
+          const mData = await mRes.json();
+          if (mData?.current && mData.current.ocean_current_velocity !== undefined) {
+            cSpeedMs = Math.max(0.12, mData.current.ocean_current_velocity);
+            cDirTo = mData.current.ocean_current_direction ?? 35.0;
+          }
+        }
+
+        // Decompose vectors
+        const wDirToRad = ((wDirFrom + 180) % 360) * Math.PI / 180;
+        const cDirToRad = (cDirTo * Math.PI) / 180;
+        const wSpeedMs = wSpeedKmh / 3.6;
+        const alpha = selectedTarget.gearName?.toLowerCase().includes('trawl') ? 0.005 : 0.0125;
+
+        // u (East-West), v (North-South) in m/s
+        const u = cSpeedMs * Math.sin(cDirToRad) + alpha * wSpeedMs * Math.sin(wDirToRad);
+        const v = cSpeedMs * Math.cos(cDirToRad) + alpha * wSpeedMs * Math.cos(wDirToRad);
+
+        const mPerDegLat = 111320.0;
+        const mPerDegLon = mPerDegLat * Math.cos(lat * Math.PI / 180);
+
+        const dlat24 = (v * 24 * 3600) / mPerDegLat;
+        const dlon24 = (u * 24 * 3600) / mPerDegLon;
+        const dlat48 = (v * 48 * 3600) / mPerDegLat;
+        const dlon48 = (u * 48 * 3600) / mPerDegLon;
+        const dlat72 = (v * 72 * 3600) / mPerDegLat;
+        const dlon72 = (u * 72 * 3600) / mPerDegLon;
+
+        if (active) {
+          setLiveDriftOffsets({
+            dlat24, dlon24,
+            dlat48, dlon48,
+            dlat72, dlon72,
+            windSummary: `${wSpeedKmh.toFixed(0)} km/h • Curr: ${(cSpeedMs * 1.944).toFixed(1)} kn`
+          });
+        }
+      } catch (err) {
+        // Safe offline fallback
+      }
+    };
+
+    updateDynamicDrift();
+    return () => { active = false; };
+  }, [selectedTarget?.id, selectedTarget?.coords]);
 
   // Live Device GPS / Satellite Fix Handler (Works completely offline via GNSS/NavIC hardware)
   const handleUpdateGps = () => {
@@ -6226,7 +6336,7 @@ export default function App() {
                         </Text>
                       </View>
                       <Text style={styles.engagedTargetTitle}>
-                        {selectedTarget.gearName} • {selectedTarget.massKg} kg • Intercepted by {currentUser.name}
+                        {selectedTarget.gearName} • {selectedTarget.massKg >= 100 ? `${(selectedTarget.massKg / 1000).toFixed(1)} Tons` : `${selectedTarget.massKg} Tons`} • Intercepted by {currentUser.name}
                       </Text>
                       <Text style={styles.engagedTargetSub}>
                         🛡️ Target: {selectedTarget.coords} • Subsurface depth {selectedTarget.depthM}m
